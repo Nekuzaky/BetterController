@@ -5,15 +5,12 @@
   "name": "Better Controller",
   "description": "Adds controller support (Xbox, PlayStation, Switch) to Minecraft.",
   "authors": [
-    "Nekuz"
+    "Nekuzaky"
   ],
   "contact": {},
   "license": "MIT",
-  "environment": "*",
+  "environment": "client",
   "entrypoints": {
-    "main": [
-      "com.bettercontroller.BetterControllerMod"
-    ],
     "client": [
       "com.bettercontroller.client.BetterControllerClientMod"
     ]

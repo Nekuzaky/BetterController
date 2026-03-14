@@ -1,0 +1,154 @@
+{
+  "schemaVersion": 5,
+  "autoActivateOnController": true,
+  "autoSwitchLayoutByControllerType": true,
+  "activeLayout": "xbox",
+  "controllerTypeLayouts": {
+    "xbox": "xbox",
+    "playstation": "playstation",
+    "switch": "switch",
+    "generic": "generic",
+    "none": "xbox"
+  },
+  "movementDeadzone": 0.14,
+  "lookDeadzone": 0.07,
+  "lookSensitivityX": 12.0,
+  "lookSensitivityY": 11.0,
+  "lookSpeedMultiplier": 2.25,
+  "lookResponseCurve": "linear",
+  "cameraSmoothing": false,
+  "cameraSmoothingStrength": 0.35,
+  "triggerThreshold": 0.45,
+  "menuAxisThreshold": 0.35,
+  "menuInitialRepeatDelayMs": 140,
+  "menuRepeatIntervalMs": 55,
+  "hudHintsEnabled": true,
+  "debugOverlayEnabled": true,
+  "radialMenuEnabled": true,
+  "radialMenuSlots": 8,
+  "radialConfirmOnRelease": true,
+  "vibrationEnabled": true,
+  "vibrationIntensity": "medium",
+  "virtualKeyboardEnabled": true,
+  "axes": {
+    "move_x": "LEFT_X",
+    "move_y": "LEFT_Y",
+    "look_x": "RIGHT_X",
+    "look_y": "RIGHT_Y"
+  },
+  "bindings": {
+    "jump": ["A"],
+    "sneak": ["R3"],
+    "sprint": ["L3"],
+    "attack": ["RT"],
+    "use": ["LT"],
+    "inventory": ["Y"],
+    "drop_item": ["B"],
+    "swap_hands": ["X"],
+    "open_chat": ["DPAD_UP"],
+    "toggle_perspective": ["DPAD_DOWN"],
+    "pause": ["START"],
+    "player_list": ["BACK"],
+    "pick_block": ["RB"],
+    "hotbar_next": ["RB"],
+    "hotbar_previous": ["LB"],
+    "hotbar_1": [],
+    "hotbar_2": [],
+    "hotbar_3": [],
+    "hotbar_4": [],
+    "hotbar_5": [],
+    "hotbar_6": [],
+    "hotbar_7": [],
+    "hotbar_8": [],
+    "hotbar_9": [],
+    "menu_up": ["DPAD_UP", "-LEFT_Y"],
+    "menu_down": ["DPAD_DOWN", "LEFT_Y"],
+    "menu_left": ["DPAD_LEFT", "-LEFT_X"],
+    "menu_right": ["DPAD_RIGHT", "LEFT_X"],
+    "menu_confirm": ["A"],
+    "menu_back": ["B"],
+    "menu_page_next": ["RT"],
+    "menu_page_prev": ["LT"],
+    "menu_tab_next": ["RB"],
+    "menu_tab_prev": ["LB"],
+    "radial_menu": ["BACK"]
+  },
+  "layouts": {
+    "xbox": {
+      "description": "Xbox style labels.",
+      "axes": {
+        "move_x": "LEFT_X",
+        "move_y": "LEFT_Y",
+        "look_x": "RIGHT_X",
+        "look_y": "RIGHT_Y"
+      },
+      "bindings": {
+        "jump": ["A"],
+        "attack": ["RT"],
+        "use": ["LT"],
+        "inventory": ["Y"],
+        "drop_item": ["B"],
+        "swap_hands": ["X"],
+        "menu_confirm": ["A"],
+        "menu_back": ["B"]
+      }
+    },
+    "playstation": {
+      "description": "PlayStation style labels.",
+      "axes": {
+        "move_x": "LEFT_X",
+        "move_y": "LEFT_Y",
+        "look_x": "RIGHT_X",
+        "look_y": "RIGHT_Y"
+      },
+      "bindings": {
+        "jump": ["CROSS"],
+        "attack": ["R2"],
+        "use": ["L2"],
+        "inventory": ["TRIANGLE"],
+        "drop_item": ["CIRCLE"],
+        "swap_hands": ["SQUARE"],
+        "menu_confirm": ["CROSS"],
+        "menu_back": ["CIRCLE"]
+      }
+    },
+    "switch": {
+      "description": "Nintendo Switch style labels.",
+      "axes": {
+        "move_x": "LEFT_X",
+        "move_y": "LEFT_Y",
+        "look_x": "RIGHT_X",
+        "look_y": "RIGHT_Y"
+      },
+      "bindings": {
+        "jump": ["SWITCH_A"],
+        "attack": ["RT"],
+        "use": ["LT"],
+        "inventory": ["SWITCH_X"],
+        "drop_item": ["SWITCH_B"],
+        "swap_hands": ["SWITCH_Y"],
+        "menu_confirm": ["SWITCH_A"],
+        "menu_back": ["SWITCH_B"]
+      }
+    },
+    "generic": {
+      "description": "Generic controller layout.",
+      "axes": {
+        "move_x": "LEFT_X",
+        "move_y": "LEFT_Y",
+        "look_x": "RIGHT_X",
+        "look_y": "RIGHT_Y"
+      },
+      "bindings": {
+        "jump": ["SOUTH"],
+        "attack": ["RT"],
+        "use": ["LT"],
+        "inventory": ["NORTH"],
+        "drop_item": ["EAST"],
+        "swap_hands": ["WEST"],
+        "menu_confirm": ["SOUTH"],
+        "menu_back": ["EAST"]
+      }
+    }
+  }
+}
