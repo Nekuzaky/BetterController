@@ -28,7 +28,7 @@ public final class RadialMenuRenderer {
             int borderColor = selected ? 0xFFFFFFFF : 0xFF808080;
 
             context.fill(x, y, x + slotWidth, y + slotHeight, fillColor);
-            context.drawBorder(x, y, slotWidth, slotHeight, borderColor);
+            context.drawStrokedRectangle(x, y, slotWidth, slotHeight, borderColor);
             context.drawCenteredTextWithShadow(
                 client.textRenderer,
                 radialMenu.slots().get(i).label(),

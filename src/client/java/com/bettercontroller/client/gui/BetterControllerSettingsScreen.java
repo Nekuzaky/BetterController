@@ -7,6 +7,7 @@ import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.ClickableWidget;
 import net.minecraft.client.gui.widget.SliderWidget;
+import net.minecraft.client.input.KeyInput;
 import net.minecraft.text.Text;
 import org.lwjgl.glfw.GLFW;
 
@@ -306,7 +307,7 @@ public final class BetterControllerSettingsScreen extends Screen {
 
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        renderBackground(context);
+        renderBackground(context, mouseX, mouseY, delta);
         super.render(context, mouseX, mouseY, delta);
 
         int centerX = this.width / 2;
@@ -350,25 +351,25 @@ public final class BetterControllerSettingsScreen extends Screen {
     }
 
     @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (keyCode == GLFW.GLFW_KEY_PAGE_DOWN) {
+    public boolean keyPressed(KeyInput input) {
+        if (input.key() == GLFW.GLFW_KEY_PAGE_DOWN) {
             return scrollBy(SCROLL_STEP * 3);
         }
-        if (keyCode == GLFW.GLFW_KEY_PAGE_UP) {
+        if (input.key() == GLFW.GLFW_KEY_PAGE_UP) {
             return scrollBy(-SCROLL_STEP * 3);
         }
-        return super.keyPressed(keyCode, scanCode, modifiers);
+        return super.keyPressed(input);
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
-        if (amount > 0.0D) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+        if (verticalAmount > 0.0D) {
             return scrollBy(-SCROLL_STEP);
         }
-        if (amount < 0.0D) {
+        if (verticalAmount < 0.0D) {
             return scrollBy(SCROLL_STEP);
         }
-        return super.mouseScrolled(mouseX, mouseY, amount);
+        return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
     }
 
     public void ensureWidgetVisible(ClickableWidget widget) {

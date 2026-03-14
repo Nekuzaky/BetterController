@@ -2,11 +2,11 @@
 
 BetterController is a client-side Fabric mod for premium controller support in Minecraft.
 
-## Stack
-- Minecraft: `1.20.1`
-- Java: `17`
-- Fabric Loader: `0.15.11`
-- Fabric API: `0.92.2+1.20.1`
+## Stack (as of 2026-03-14)
+- Minecraft: `1.21.11`
+- Java: `21`
+- Fabric Loader: `0.18.4`
+- Fabric API: `0.141.3+1.21.11`
 
 ## Current V2 Features
 - Automatic controller connect/disconnect detection.
@@ -89,7 +89,12 @@ BetterController is a client-side Fabric mod for premium controller support in M
 - Or use the in-game `Apply Ultra Fluid Preset` button from BetterController settings.
 
 ## Build and Run
+Requires JDK `21` (`java -version`).
+
 Windows:
+- if needed, set Java 21 for the current terminal:
+  - ``$env:JAVA_HOME="C:\Path\To\jdk-21"``
+  - ``$env:PATH="$env:JAVA_HOME\bin;$env:PATH"``
 - `.\gradlew.bat build`
 - `.\gradlew.bat runClient`
 

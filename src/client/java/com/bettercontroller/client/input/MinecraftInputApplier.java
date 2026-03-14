@@ -2,15 +2,21 @@ package com.bettercontroller.client.input;
 
 import com.bettercontroller.client.translation.GameplayInputFrame;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.input.Input;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.client.gui.screen.GameMenuScreen;
+import net.minecraft.util.PlayerInput;
+import net.minecraft.util.math.Vec2f;
 import net.minecraft.network.packet.c2s.play.UpdateSelectedSlotC2SPacket;
 
 import java.lang.reflect.Field;
 
 public final class MinecraftInputApplier {
     private static final Field BOUND_KEY_FIELD = resolveBoundKeyField();
+    private static final Field MOVEMENT_VECTOR_FIELD = resolveMovementVectorField();
+    private boolean previousAttackHeld;
+    private boolean previousUseHeld;
 
     public void applyGameplayFrame(MinecraftClient client, GameplayInputFrame frame) {
         if (client == null || client.options == null || client.player == null) {
@@ -25,8 +31,8 @@ public final class MinecraftInputApplier {
         setHold(client.options.jumpKey, frame.jumpHeld());
         setHold(client.options.sprintKey, frame.sprintHeld());
         setHold(client.options.sneakKey, frame.sneakHeld());
-        setHold(client.options.attackKey, frame.attackHeld());
-        setHold(client.options.useKey, frame.useHeld());
+        applyActionKey(client.options.attackKey, frame.attackHeld(), true);
+        applyActionKey(client.options.useKey, frame.useHeld(), false);
         setHold(client.options.playerListKey, frame.playerListHeld());
 
         if (frame.inventoryTap()) {
@@ -84,6 +90,8 @@ public final class MinecraftInputApplier {
         setHold(client.options.attackKey, false);
         setHold(client.options.useKey, false);
         setHold(client.options.playerListKey, false);
+        previousAttackHeld = false;
+        previousUseHeld = false;
     }
 
     private static void applyAnalogMovement(MinecraftClient client, GameplayInputFrame frame) {
@@ -91,14 +99,18 @@ public final class MinecraftInputApplier {
             return;
         }
 
-        client.player.input.movementSideways = frame.processedMoveX();
-        client.player.input.movementForward = -frame.processedMoveY();
-        client.player.input.pressingLeft = frame.moveLeft();
-        client.player.input.pressingRight = frame.moveRight();
-        client.player.input.pressingForward = frame.moveForward();
-        client.player.input.pressingBack = frame.moveBackward();
-        client.player.input.jumping = frame.jumpHeld();
-        client.player.input.sneaking = frame.sneakHeld();
+        Input input = client.player.input;
+        input.playerInput = new PlayerInput(
+            frame.moveForward(),
+            frame.moveBackward(),
+            frame.moveLeft(),
+            frame.moveRight(),
+            frame.jumpHeld(),
+            frame.sneakHeld(),
+            frame.sprintHeld()
+        );
+
+        setMovementVector(input, frame.processedMoveX(), -frame.processedMoveY());
     }
 
     private static void clearAnalogMovement(MinecraftClient client) {
@@ -106,14 +118,9 @@ public final class MinecraftInputApplier {
             return;
         }
 
-        client.player.input.movementSideways = 0.0F;
-        client.player.input.movementForward = 0.0F;
-        client.player.input.pressingLeft = false;
-        client.player.input.pressingRight = false;
-        client.player.input.pressingForward = false;
-        client.player.input.pressingBack = false;
-        client.player.input.jumping = false;
-        client.player.input.sneaking = false;
+        Input input = client.player.input;
+        input.playerInput = PlayerInput.DEFAULT;
+        setMovementVector(input, 0.0F, 0.0F);
     }
 
     private static void cycleSlot(MinecraftClient client, int offset) {
@@ -121,7 +128,7 @@ public final class MinecraftInputApplier {
             return;
         }
 
-        int currentSlot = client.player.getInventory().selectedSlot;
+        int currentSlot = client.player.getInventory().getSelectedSlot();
         int nextSlot = Math.floorMod(currentSlot + offset, 9);
         selectSlot(client, nextSlot);
     }
@@ -131,7 +138,7 @@ public final class MinecraftInputApplier {
             return;
         }
         int nextSlot = Math.floorMod(slot, 9);
-        client.player.getInventory().selectedSlot = nextSlot;
+        client.player.getInventory().setSelectedSlot(nextSlot);
         if (client.player.networkHandler != null) {
             client.player.networkHandler.sendPacket(new UpdateSelectedSlotC2SPacket(nextSlot));
         }
@@ -158,6 +165,20 @@ public final class MinecraftInputApplier {
         keyBinding.setPressed(pressed);
     }
 
+    private void applyActionKey(KeyBinding keyBinding, boolean held, boolean isAttack) {
+        boolean wasHeld = isAttack ? previousAttackHeld : previousUseHeld;
+        // Pulse a tap on rising edge so actions also trigger when not targeting blocks/entities.
+        if (held && !wasHeld) {
+            tap(keyBinding);
+        }
+        setHold(keyBinding, held);
+        if (isAttack) {
+            previousAttackHeld = held;
+        } else {
+            previousUseHeld = held;
+        }
+    }
+
     private static InputUtil.Key readBoundKey(KeyBinding keyBinding) {
         if (BOUND_KEY_FIELD == null) {
             return null;
@@ -172,6 +193,36 @@ public final class MinecraftInputApplier {
     private static Field resolveBoundKeyField() {
         try {
             Field field = KeyBinding.class.getDeclaredField("boundKey");
+            field.setAccessible(true);
+            return field;
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private static void setMovementVector(Input input, float moveX, float moveY) {
+        if (input == null || MOVEMENT_VECTOR_FIELD == null) {
+            return;
+        }
+
+        float clampedX = Math.max(-1.0F, Math.min(1.0F, moveX));
+        float clampedY = Math.max(-1.0F, Math.min(1.0F, moveY));
+        float lengthSquared = (clampedX * clampedX) + (clampedY * clampedY);
+        if (lengthSquared > 1.0F) {
+            float scale = (float) (1.0D / Math.sqrt(lengthSquared));
+            clampedX *= scale;
+            clampedY *= scale;
+        }
+
+        try {
+            MOVEMENT_VECTOR_FIELD.set(input, new Vec2f(clampedX, clampedY));
+        } catch (IllegalAccessException ignored) {
+        }
+    }
+
+    private static Field resolveMovementVectorField() {
+        try {
+            Field field = Input.class.getDeclaredField("movementVector");
             field.setAccessible(true);
             return field;
         } catch (Exception ignored) {

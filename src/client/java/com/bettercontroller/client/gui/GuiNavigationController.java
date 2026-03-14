@@ -1,11 +1,14 @@
 package com.bettercontroller.client.gui;
 
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.Element;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.AlwaysSelectedEntryListWidget;
 import net.minecraft.client.gui.widget.ClickableWidget;
 import net.minecraft.client.gui.widget.SliderWidget;
+import net.minecraft.client.input.KeyInput;
+import net.minecraft.client.input.MouseInput;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
@@ -40,10 +43,10 @@ public final class GuiNavigationController {
                 triggerBack(screen);
             }
             if (inputFrame.tabNext()) {
-                screen.keyPressed(GLFW.GLFW_KEY_TAB, 0, 0);
+                pressKey(screen, GLFW.GLFW_KEY_TAB);
             }
             if (inputFrame.tabPrev()) {
-                screen.keyPressed(GLFW.GLFW_KEY_TAB, 0, GLFW.GLFW_MOD_SHIFT);
+                pressKey(screen, GLFW.GLFW_KEY_TAB, GLFW.GLFW_MOD_SHIFT);
             }
             return;
         }
@@ -87,24 +90,24 @@ public final class GuiNavigationController {
             triggerBack(screen);
         }
         if (inputFrame.pageNext()) {
-            screen.keyPressed(GLFW.GLFW_KEY_PAGE_DOWN, 0, 0);
+            pressKey(screen, GLFW.GLFW_KEY_PAGE_DOWN);
         }
         if (inputFrame.pagePrev()) {
-            screen.keyPressed(GLFW.GLFW_KEY_PAGE_UP, 0, 0);
+            pressKey(screen, GLFW.GLFW_KEY_PAGE_UP);
         }
         if (inputFrame.tabNext()) {
-            screen.keyPressed(GLFW.GLFW_KEY_TAB, 0, 0);
+            pressKey(screen, GLFW.GLFW_KEY_TAB);
         }
         if (inputFrame.tabPrev()) {
-            screen.keyPressed(GLFW.GLFW_KEY_TAB, 0, GLFW.GLFW_MOD_SHIFT);
+            pressKey(screen, GLFW.GLFW_KEY_TAB, GLFW.GLFW_MOD_SHIFT);
         }
 
         if (focusElements.get(selectedIndex).widget() instanceof SliderWidget sliderWidget) {
             if (inputFrame.left()) {
-                sliderWidget.keyPressed(GLFW.GLFW_KEY_LEFT, 0, 0);
+                pressKey(sliderWidget, GLFW.GLFW_KEY_LEFT);
             }
             if (inputFrame.right()) {
-                sliderWidget.keyPressed(GLFW.GLFW_KEY_RIGHT, 0, 0);
+                pressKey(sliderWidget, GLFW.GLFW_KEY_RIGHT);
             }
         }
     }
@@ -137,29 +140,29 @@ public final class GuiNavigationController {
         boolean used = false;
         if (inputFrame.up()) {
             screen.setFocused(listWidget);
-            used = listWidget.keyPressed(GLFW.GLFW_KEY_UP, 0, 0) || screen.keyPressed(GLFW.GLFW_KEY_UP, 0, 0) || used;
+            used = pressKey(listWidget, GLFW.GLFW_KEY_UP) || pressKey(screen, GLFW.GLFW_KEY_UP) || used;
         }
         if (inputFrame.down()) {
             screen.setFocused(listWidget);
-            used = listWidget.keyPressed(GLFW.GLFW_KEY_DOWN, 0, 0) || screen.keyPressed(GLFW.GLFW_KEY_DOWN, 0, 0) || used;
+            used = pressKey(listWidget, GLFW.GLFW_KEY_DOWN) || pressKey(screen, GLFW.GLFW_KEY_DOWN) || used;
         }
         if (inputFrame.confirm()) {
             screen.setFocused(listWidget);
-            used = listWidget.keyPressed(GLFW.GLFW_KEY_ENTER, 0, 0)
-                || listWidget.keyPressed(GLFW.GLFW_KEY_KP_ENTER, 0, 0)
-                || screen.keyPressed(GLFW.GLFW_KEY_ENTER, 0, 0)
+            used = pressKey(listWidget, GLFW.GLFW_KEY_ENTER)
+                || pressKey(listWidget, GLFW.GLFW_KEY_KP_ENTER)
+                || pressKey(screen, GLFW.GLFW_KEY_ENTER)
                 || used;
         }
         if (inputFrame.pageNext()) {
             screen.setFocused(listWidget);
-            used = listWidget.keyPressed(GLFW.GLFW_KEY_PAGE_DOWN, 0, 0)
-                || screen.keyPressed(GLFW.GLFW_KEY_PAGE_DOWN, 0, 0)
+            used = pressKey(listWidget, GLFW.GLFW_KEY_PAGE_DOWN)
+                || pressKey(screen, GLFW.GLFW_KEY_PAGE_DOWN)
                 || used;
         }
         if (inputFrame.pagePrev()) {
             screen.setFocused(listWidget);
-            used = listWidget.keyPressed(GLFW.GLFW_KEY_PAGE_UP, 0, 0)
-                || screen.keyPressed(GLFW.GLFW_KEY_PAGE_UP, 0, 0)
+            used = pressKey(listWidget, GLFW.GLFW_KEY_PAGE_UP)
+                || pressKey(screen, GLFW.GLFW_KEY_PAGE_UP)
                 || used;
         }
 
@@ -189,10 +192,10 @@ public final class GuiNavigationController {
 
         if (widget instanceof SliderWidget sliderWidget) {
             if (inputFrame.left()) {
-                sliderWidget.keyPressed(GLFW.GLFW_KEY_LEFT, 0, 0);
+                pressKey(sliderWidget, GLFW.GLFW_KEY_LEFT);
             }
             if (inputFrame.right()) {
-                sliderWidget.keyPressed(GLFW.GLFW_KEY_RIGHT, 0, 0);
+                pressKey(sliderWidget, GLFW.GLFW_KEY_RIGHT);
             }
         } else {
             if (inputFrame.confirm()) {
@@ -300,15 +303,27 @@ public final class GuiNavigationController {
         ClickableWidget widget = selected.widget();
         double centerX = selected.centerX();
         double centerY = selected.centerY();
-        widget.mouseClicked(centerX, centerY, 0);
-        widget.mouseReleased(centerX, centerY, 0);
+        Click click = new Click(centerX, centerY, new MouseInput(GLFW.GLFW_MOUSE_BUTTON_LEFT, 0));
+        widget.mouseClicked(click, false);
+        widget.mouseReleased(click);
     }
 
     private static void triggerBack(Screen screen) {
         if (screen.shouldCloseOnEsc()) {
             screen.close();
         } else {
-            screen.keyPressed(GLFW.GLFW_KEY_ESCAPE, 0, 0);
+            pressKey(screen, GLFW.GLFW_KEY_ESCAPE);
         }
+    }
+
+    private static boolean pressKey(Element element, int keyCode) {
+        return pressKey(element, keyCode, 0);
+    }
+
+    private static boolean pressKey(Element element, int keyCode, int modifiers) {
+        if (element == null) {
+            return false;
+        }
+        return element.keyPressed(new KeyInput(keyCode, 0, modifiers));
     }
 }
