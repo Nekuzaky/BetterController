@@ -4,11 +4,14 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.Element;
 import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.gui.screen.ingame.HandledScreen;
 import net.minecraft.client.gui.widget.AlwaysSelectedEntryListWidget;
 import net.minecraft.client.gui.widget.ClickableWidget;
 import net.minecraft.client.gui.widget.SliderWidget;
 import net.minecraft.client.input.KeyInput;
 import net.minecraft.client.input.MouseInput;
+import net.minecraft.screen.slot.Slot;
+import net.minecraft.screen.slot.SlotActionType;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
@@ -17,6 +20,7 @@ import java.util.List;
 public final class GuiNavigationController {
     private Screen lastScreen;
     private int selectedIndex = -1;
+    private int selectedHandledSlotId = -1;
     private boolean preferListFocus;
 
     public void onScreenTick(MinecraftClient client, GuiInputFrame inputFrame) {
@@ -25,8 +29,15 @@ public final class GuiNavigationController {
         }
 
         Screen screen = client.currentScreen;
+        boolean screenChanged = screen != lastScreen;
+        if (screenChanged) {
+            selectedIndex = -1;
+            selectedHandledSlotId = -1;
+        }
+        lastScreen = screen;
+
         AlwaysSelectedEntryListWidget<?> listWidget = findListWidget(screen);
-        if (screen != lastScreen) {
+        if (screenChanged) {
             preferListFocus = listWidget != null;
         } else if (listWidget == null) {
             preferListFocus = false;
@@ -34,6 +45,16 @@ public final class GuiNavigationController {
             preferListFocus = false;
         } else if (inputFrame.up() || inputFrame.down() || inputFrame.confirm() || inputFrame.pageNext() || inputFrame.pagePrev()) {
             preferListFocus = true;
+        }
+
+        if (screen instanceof HandledScreen<?> handledScreen) {
+            boolean handledInventoryNavigation = handleHandledScreenNavigation(client, handledScreen, inputFrame, screenChanged);
+            if (handledInventoryNavigation) {
+                if (inputFrame.back()) {
+                    triggerBack(screen);
+                }
+                return;
+            }
         }
 
         boolean listNavigationActive = handleListNavigation(screen, listWidget, inputFrame, preferListFocus);
@@ -51,8 +72,7 @@ public final class GuiNavigationController {
             return;
         }
 
-        if (screen != lastScreen) {
-            lastScreen = screen;
+        if (screenChanged) {
             selectedIndex = findInitialSelectionIndex(screen, focusElements);
         }
         if (selectedIndex < 0 || selectedIndex >= focusElements.size()) {
@@ -115,7 +135,54 @@ public final class GuiNavigationController {
     public void reset() {
         lastScreen = null;
         selectedIndex = -1;
+        selectedHandledSlotId = -1;
         preferListFocus = false;
+    }
+
+    private boolean handleHandledScreenNavigation(
+        MinecraftClient client,
+        HandledScreen<?> handledScreen,
+        GuiInputFrame inputFrame,
+        boolean screenChanged
+    ) {
+        boolean hasInventoryNavigationInput = inputFrame.up()
+            || inputFrame.down()
+            || inputFrame.left()
+            || inputFrame.right()
+            || inputFrame.confirm();
+        if (!hasInventoryNavigationInput && !screenChanged) {
+            return false;
+        }
+
+        List<Slot> slots = collectNavigableSlots(handledScreen);
+        if (slots.isEmpty()) {
+            return false;
+        }
+
+        if (screenChanged || findSlotById(slots, selectedHandledSlotId) == null) {
+            Slot initial = resolveInitialSlot(client, slots);
+            selectedHandledSlotId = initial.id;
+        }
+
+        if (!hasInventoryNavigationInput) {
+            return false;
+        }
+
+        if (inputFrame.up()) {
+            selectedHandledSlotId = findDirectionalSlotId(slots, selectedHandledSlotId, 0, -1);
+        } else if (inputFrame.down()) {
+            selectedHandledSlotId = findDirectionalSlotId(slots, selectedHandledSlotId, 0, 1);
+        } else if (inputFrame.left()) {
+            selectedHandledSlotId = findDirectionalSlotId(slots, selectedHandledSlotId, -1, 0);
+        } else if (inputFrame.right()) {
+            selectedHandledSlotId = findDirectionalSlotId(slots, selectedHandledSlotId, 1, 0);
+        }
+
+        Slot selectedSlot = findSlotById(slots, selectedHandledSlotId);
+        if (inputFrame.confirm()) {
+            clickHandledSlot(client, handledScreen, selectedSlot);
+        }
+        return true;
     }
 
     private static boolean handleListNavigation(
@@ -288,6 +355,42 @@ public final class GuiNavigationController {
         return bestIndex;
     }
 
+    private static int findDirectionalSlotId(List<Slot> slots, int currentId, int directionX, int directionY) {
+        Slot current = findSlotById(slots, currentId);
+        if (current == null) {
+            return slots.getFirst().id;
+        }
+
+        int currentCenterX = current.x + 8;
+        int currentCenterY = current.y + 8;
+        Slot best = current;
+        double bestScore = Double.MAX_VALUE;
+
+        for (Slot candidate : slots) {
+            if (candidate == null || candidate.id == current.id) {
+                continue;
+            }
+
+            int deltaX = (candidate.x + 8) - currentCenterX;
+            int deltaY = (candidate.y + 8) - currentCenterY;
+
+            if (directionX < 0 && deltaX >= 0) continue;
+            if (directionX > 0 && deltaX <= 0) continue;
+            if (directionY < 0 && deltaY >= 0) continue;
+            if (directionY > 0 && deltaY <= 0) continue;
+
+            double distance = Math.sqrt((deltaX * deltaX) + (deltaY * deltaY));
+            double axisPenalty = directionX != 0 ? Math.abs(deltaY) * 0.55D : Math.abs(deltaX) * 0.55D;
+            double score = distance + axisPenalty;
+            if (score < bestScore) {
+                bestScore = score;
+                best = candidate;
+            }
+        }
+
+        return best.id;
+    }
+
     private static void applySelection(Screen screen, List<GuiFocusElement> focusElements, int selectedIndex) {
         for (int i = 0; i < focusElements.size(); i++) {
             ClickableWidget widget = focusElements.get(i).widget();
@@ -314,6 +417,60 @@ public final class GuiNavigationController {
         } else {
             pressKey(screen, GLFW.GLFW_KEY_ESCAPE);
         }
+    }
+
+    private static List<Slot> collectNavigableSlots(HandledScreen<?> screen) {
+        List<Slot> slots = new ArrayList<>();
+        if (screen == null || screen.getScreenHandler() == null) {
+            return slots;
+        }
+        for (Slot slot : screen.getScreenHandler().slots) {
+            if (slot != null && slot.isEnabled() && slot.canBeHighlighted()) {
+                slots.add(slot);
+            }
+        }
+        return slots;
+    }
+
+    private static Slot findSlotById(List<Slot> slots, int slotId) {
+        for (Slot slot : slots) {
+            if (slot != null && slot.id == slotId) {
+                return slot;
+            }
+        }
+        return null;
+    }
+
+    private static Slot resolveInitialSlot(MinecraftClient client, List<Slot> slots) {
+        if (slots.isEmpty()) {
+            return null;
+        }
+        if (client == null || client.player == null) {
+            return slots.getFirst();
+        }
+
+        int selectedHotbar = client.player.getInventory().getSelectedSlot();
+        for (Slot slot : slots) {
+            if (slot != null
+                && slot.inventory == client.player.getInventory()
+                && slot.getIndex() == selectedHotbar) {
+                return slot;
+            }
+        }
+        return slots.getFirst();
+    }
+
+    private static void clickHandledSlot(MinecraftClient client, HandledScreen<?> screen, Slot slot) {
+        if (client == null || client.player == null || client.interactionManager == null || screen == null || slot == null) {
+            return;
+        }
+        client.interactionManager.clickSlot(
+            screen.getScreenHandler().syncId,
+            slot.id,
+            0,
+            SlotActionType.PICKUP,
+            client.player
+        );
     }
 
     private static boolean pressKey(Element element, int keyCode) {
