@@ -1,6 +1,7 @@
 package com.bettercontroller.client.render;
 
 import com.bettercontroller.client.config.ControllerConfig;
+import com.bettercontroller.client.config.ControllerPreset;
 import com.bettercontroller.client.input.ControllerRuntime;
 import com.bettercontroller.client.polling.ControllerAxis;
 import com.bettercontroller.client.polling.ControllerButton;
@@ -46,12 +47,15 @@ public final class ControllerDebugOverlayRenderer {
             "BetterController Debug (F8)",
             "Connected: " + snapshot.isConnected(),
             "Type: " + runtime.activeControllerType(),
+            "Glyph Set: " + runtime.glyphs().activeGlyphSetName(),
             "Layout: " + (runtime.activeLayout() != null ? runtime.activeLayout().name() : "n/a"),
+            "Preset: " + ControllerPreset.fromId(config.activePreset).displayName(),
             "Controller: " + snapshot.joystickName(),
             formatAxes("Raw", snapshot),
+            formatTriggers(snapshot),
             String.format(Locale.ROOT, "Processed move(%.3f, %.3f) look(%.3f, %.3f)",
                 frame.processedMoveX(), frame.processedMoveY(), frame.processedLookX(), frame.processedLookY()),
-            "Buttons: " + pressedButtons(snapshot)
+            "Buttons: " + pressedButtons(snapshot, runtime)
         };
 
         int maxWidth = 0;
@@ -79,16 +83,27 @@ public final class ControllerDebugOverlayRenderer {
         );
     }
 
-    private static String pressedButtons(ControllerSnapshot snapshot) {
+    private static String pressedButtons(ControllerSnapshot snapshot, ControllerRuntime runtime) {
         StringBuilder builder = new StringBuilder();
         for (ControllerButton button : ControllerButton.values()) {
             if (snapshot.isPressed(button)) {
                 if (builder.length() > 0) {
                     builder.append(", ");
                 }
-                builder.append(button.name());
+                builder.append(runtime.glyphs().glyphForButton(button));
             }
         }
         return builder.length() == 0 ? "none" : builder.toString();
+    }
+
+    private static String formatTriggers(ControllerSnapshot snapshot) {
+        float left = normalizeTrigger(snapshot.axis(ControllerAxis.LEFT_TRIGGER));
+        float right = normalizeTrigger(snapshot.axis(ControllerAxis.RIGHT_TRIGGER));
+        return String.format(Locale.ROOT, "Triggers LT %.3f RT %.3f", left, right);
+    }
+
+    private static float normalizeTrigger(float value) {
+        float normalized = (value + 1.0F) * 0.5F;
+        return Math.max(0.0F, Math.min(1.0F, normalized));
     }
 }

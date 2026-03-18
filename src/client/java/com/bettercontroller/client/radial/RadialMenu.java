@@ -10,8 +10,12 @@ public final class RadialMenu {
     private int selectedIndex = -1;
 
     public void open(int requestedSlots) {
+        open(requestedSlots, List.of());
+    }
+
+    public void open(int requestedSlots, List<String> labels) {
         int slotCount = Math.max(4, Math.min(9, requestedSlots));
-        configureSlots(slotCount);
+        configureSlots(slotCount, labels == null ? List.of() : labels);
         active = true;
         if (selectedIndex < 0 || selectedIndex >= slots.size()) {
             selectedIndex = 0;
@@ -48,14 +52,14 @@ public final class RadialMenu {
         return slots.get(selectedIndex).hotbarSlot();
     }
 
-    private void configureSlots(int slotCount) {
-        if (slots.size() == slotCount) {
-            return;
-        }
-
+    private void configureSlots(int slotCount, List<String> labels) {
         slots.clear();
         for (int i = 0; i < slotCount; i++) {
-            slots.add(new RadialMenuSlot(i, "Slot " + (i + 1)));
+            String fallback = "Slot " + (i + 1);
+            String label = i < labels.size() && labels.get(i) != null && !labels.get(i).isBlank()
+                ? labels.get(i)
+                : fallback;
+            slots.add(new RadialMenuSlot(i, label));
         }
     }
 }

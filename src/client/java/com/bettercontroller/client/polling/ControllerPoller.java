@@ -19,7 +19,7 @@ public final class ControllerPoller {
                 activeControllerType = ControllerType.NONE;
                 snapshot.clearConnection();
             }
-            return null;
+            return snapshot;
         }
 
         String joystickName = GLFW.glfwGetJoystickName(detectedJoystick);
@@ -36,9 +36,18 @@ public final class ControllerPoller {
                 joystickGuid != null ? joystickGuid : "n/a"
             );
         }
+        if (activeControllerType != detectedType) {
+            BetterControllerMod.LOGGER.info(
+                "Controller type changed from {} to {} ({}).",
+                activeControllerType,
+                detectedType,
+                joystickName != null ? joystickName : "Unknown"
+            );
+        }
 
         if (!GLFW.glfwGetGamepadState(activeJoystickId, state)) {
-            return null;
+            snapshot.clearConnection();
+            return snapshot;
         }
 
         snapshot.update(activeJoystickId, joystickName, joystickGuid, detectedType, state);

@@ -3,11 +3,16 @@ package com.bettercontroller.client;
 import com.bettercontroller.BetterControllerMod;
 import com.bettercontroller.client.gui.BetterControllerSettingsScreen;
 import com.bettercontroller.client.input.ControllerRuntime;
+import com.bettercontroller.client.radial.RadialMenuRenderer;
+import com.bettercontroller.client.render.ControllerDebugOverlayRenderer;
+import com.bettercontroller.client.render.ControllerHUDRenderer;
+import com.bettercontroller.client.render.ControllerInventoryHighlightRenderer;
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.fabricmc.fabric.api.client.screen.v1.Screens;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.GameMenuScreen;
 import net.minecraft.client.gui.screen.Screen;
@@ -15,16 +20,16 @@ import net.minecraft.client.gui.screen.option.ControlsOptionsScreen;
 import net.minecraft.client.gui.screen.option.OptionsScreen;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.text.Text;
+import net.minecraft.util.Identifier;
 import org.lwjgl.glfw.GLFW;
-import com.bettercontroller.client.radial.RadialMenuRenderer;
-import com.bettercontroller.client.render.ControllerDebugOverlayRenderer;
-import com.bettercontroller.client.render.ControllerHUDRenderer;
 
 public class BetterControllerClientMod implements ClientModInitializer {
+    private static final Identifier BETTERCONTROLLER_HUD_LAYER_ID = Identifier.of("bettercontroller", "runtime_hud");
     private final ControllerRuntime controllerRuntime = new ControllerRuntime();
     private final ControllerHUDRenderer controllerHUDRenderer = new ControllerHUDRenderer();
     private final RadialMenuRenderer radialMenuRenderer = new RadialMenuRenderer();
     private final ControllerDebugOverlayRenderer debugOverlayRenderer = new ControllerDebugOverlayRenderer();
+    private final ControllerInventoryHighlightRenderer inventoryHighlightRenderer = new ControllerInventoryHighlightRenderer();
     private boolean debugToggleLatch;
 
     @Override
@@ -35,8 +40,12 @@ public class BetterControllerClientMod implements ClientModInitializer {
             if (screen instanceof OptionsScreen || screen instanceof ControlsOptionsScreen || screen instanceof GameMenuScreen) {
                 addSettingsButton(client, screen, scaledWidth);
             }
+            ScreenEvents.afterRender(screen).register((renderedScreen, drawContext, mouseX, mouseY, tickDelta) -> {
+                MinecraftClient currentClient = MinecraftClient.getInstance();
+                inventoryHighlightRenderer.render(currentClient, drawContext, controllerRuntime);
+            });
         });
-        HudRenderCallback.EVENT.register((drawContext, tickDelta) -> {
+        HudElementRegistry.attachElementAfter(VanillaHudElements.SUBTITLES, BETTERCONTROLLER_HUD_LAYER_ID, (drawContext, tickCounter) -> {
             MinecraftClient client = MinecraftClient.getInstance();
             controllerRuntime.onRenderFrame(client);
             controllerHUDRenderer.render(client, drawContext, controllerRuntime);
@@ -64,7 +73,7 @@ public class BetterControllerClientMod implements ClientModInitializer {
             return;
         }
 
-        String buttonLabel = "Controller Settings";
+        String buttonLabel = "Controller Settings...";
         boolean alreadyPresent = Screens.getButtons(screen).stream()
             .anyMatch(widget -> widget instanceof ButtonWidget button
                 && buttonLabel.equals(button.getMessage().getString()));
@@ -76,9 +85,9 @@ public class BetterControllerClientMod implements ClientModInitializer {
         int y = 6;
         int width = 146;
         if (screen instanceof ControlsOptionsScreen) {
-            x = (scaledWidth / 2) - 155;
+            x = (scaledWidth / 2) - 150;
             y = screen.height - 52;
-            width = 150;
+            width = 300;
         }
 
         ButtonWidget button = ButtonWidget.builder(

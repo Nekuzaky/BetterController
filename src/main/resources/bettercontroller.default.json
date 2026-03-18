@@ -1,17 +1,19 @@
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "_documentation": [
     "BetterController V2 config",
     "Set activeLayout manually or enable autoSwitchLayoutByControllerType to switch automatically by detected controller type.",
     "Axes support inversion with '-' prefix. Example: -RIGHT_Y.",
     "Button aliases are supported: A/B/X/Y, CROSS/CIRCLE/SQUARE/TRIANGLE, SWITCH_A/SWITCH_B/SWITCH_X/SWITCH_Y.",
     "lookResponseCurve supports: linear, exponential_light, exponential_strong.",
+    "activePreset supports: console, smooth, precision, southpaw.",
     "lookSpeedMultiplier controls overall camera speed.",
     "menuInitialRepeatDelayMs/menuRepeatIntervalMs control menu navigation repeat speed."
   ],
   "autoActivateOnController": true,
   "autoSwitchLayoutByControllerType": true,
   "activeLayout": "xbox",
+  "activePreset": "console",
   "controllerTypeLayouts": {
     "xbox": "xbox",
     "playstation": "playstation",
@@ -21,10 +23,12 @@
   },
   "movementDeadzone": 0.14,
   "lookDeadzone": 0.07,
+  "lookAntiDeadzone": 0.02,
   "lookSensitivityX": 12.0,
   "lookSensitivityY": 11.0,
   "lookSpeedMultiplier": 2.25,
   "lookResponseCurve": "linear",
+  "invertLookY": false,
   "cameraSmoothing": false,
   "cameraSmoothingStrength": 0.35,
   "triggerThreshold": 0.45,

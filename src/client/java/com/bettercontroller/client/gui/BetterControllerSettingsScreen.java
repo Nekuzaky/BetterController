@@ -1,7 +1,13 @@
 package com.bettercontroller.client.gui;
 
 import com.bettercontroller.client.config.ControllerConfig;
+import com.bettercontroller.client.config.ControllerPreset;
 import com.bettercontroller.client.input.ControllerRuntime;
+import com.bettercontroller.client.polling.ControllerAxis;
+import com.bettercontroller.client.polling.ControllerButton;
+import com.bettercontroller.client.polling.ControllerSnapshot;
+import com.bettercontroller.client.translation.GameplayInputFrame;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
@@ -12,49 +18,59 @@ import net.minecraft.text.Text;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
 
 public final class BetterControllerSettingsScreen extends Screen {
-    private static final int SLIDER_WIDTH = 280;
+    private static final int SLIDER_WIDTH = 286;
     private static final int CONTROL_HEIGHT = 20;
-    private static final int CONTENT_TOP = 34;
-    private static final int CONTENT_BOTTOM_MARGIN = 56;
+    private static final int CONTENT_TOP = 72;
+    private static final int CONTENT_BOTTOM_MARGIN = 62;
     private static final int SCROLL_STEP = 22;
+    private static final int SECTION_HEADER_HEIGHT = 18;
+    private static final int SECTION_GAP = 14;
 
     private final Screen parent;
     private final ControllerRuntime runtime;
 
-    private float movementDeadzone;
-    private float lookDeadzone;
+    private float leftStickDeadzone;
+    private float rightStickDeadzone;
+    private float lookAntiDeadzone;
     private float lookSensitivityX;
     private float lookSensitivityY;
     private float lookSpeedMultiplier;
     private float triggerThreshold;
     private float menuAxisThreshold;
-    private int menuInitialRepeatDelayMs;
-    private int menuRepeatIntervalMs;
     private float cameraSmoothingStrength;
+    private boolean invertLookY;
     private boolean hudHintsEnabled;
+    private boolean debugOverlayEnabled;
     private boolean cameraSmoothing;
     private String lookResponseCurve;
+    private String activePresetId;
     private boolean dirty;
+    private boolean syncingWidgets;
 
-    private ConfigSlider movementDeadzoneSlider;
-    private ConfigSlider lookDeadzoneSlider;
+    private ConfigSlider leftDeadzoneSlider;
+    private ConfigSlider rightDeadzoneSlider;
+    private ConfigSlider antiDeadzoneSlider;
     private ConfigSlider sensitivityXSlider;
     private ConfigSlider sensitivityYSlider;
-    private ConfigSlider lookSpeedSlider;
+    private ConfigSlider speedSlider;
     private ConfigSlider triggerThresholdSlider;
-    private ConfigSlider menuAxisThresholdSlider;
-    private ConfigSlider menuInitialDelaySlider;
-    private ConfigSlider menuRepeatIntervalSlider;
+    private ConfigSlider menuThresholdSlider;
     private ConfigSlider smoothingStrengthSlider;
+    private ButtonWidget invertYToggleButton;
     private ButtonWidget hudToggleButton;
+    private ButtonWidget debugOverlayButton;
     private ButtonWidget smoothingToggleButton;
     private ButtonWidget responseCurveButton;
     private ButtonWidget doneButton;
     private final List<ScrollEntry> scrollEntries = new ArrayList<>();
+    private final List<SectionHeader> sectionHeaders = new ArrayList<>();
+    private final IdentityHashMap<ClickableWidget, String> widgetHints = new IdentityHashMap<>();
+    private final IdentityHashMap<ClickableWidget, String> widgetCategories = new IdentityHashMap<>();
     private int scrollOffset;
     private int maxScrollOffset;
 
@@ -71,100 +87,79 @@ public final class BetterControllerSettingsScreen extends Screen {
     @Override
     protected void init() {
         scrollEntries.clear();
+        sectionHeaders.clear();
+        widgetHints.clear();
+        widgetCategories.clear();
         scrollOffset = 0;
         maxScrollOffset = 0;
 
+        final String inputCategory = "Input";
+        final String cameraCategory = "Camera";
+        final String interfaceCategory = "Interface";
+
         int centerX = this.width / 2;
-        int y = 34;
+        int y = CONTENT_TOP;
 
-        movementDeadzoneSlider = new ConfigSlider(
+        y = addSectionHeader(
+            "Input",
+            "Movement deadzones, trigger threshold, and menu stick behavior.",
+            y
+        );
+
+        leftDeadzoneSlider = new ConfigSlider(
             centerX - (SLIDER_WIDTH / 2), y, SLIDER_WIDTH, CONTROL_HEIGHT,
-            movementDeadzone, 0.0F, 0.40F
+            leftStickDeadzone, 0.0F, 0.40F
         ) {
             @Override
             protected String label(float value) {
-                return String.format(Locale.ROOT, "Movement Deadzone: %.2f", value);
+                return "Left Stick Deadzone";
+            }
+
+            @Override
+            protected String valueText(float value) {
+                return String.format(Locale.ROOT, "%.2f", value);
             }
 
             @Override
             protected void onValueChanged(float value) {
-                movementDeadzone = value;
-                markDirty();
+                leftStickDeadzone = value;
+                onMutableChange();
             }
         };
-        addScrollableChild(movementDeadzoneSlider, y);
+        addScrollableChild(
+            leftDeadzoneSlider,
+            y,
+            inputCategory,
+            "Filters tiny accidental movement on the left stick."
+        );
         y += 22;
 
-        lookDeadzoneSlider = new ConfigSlider(
+        rightDeadzoneSlider = new ConfigSlider(
             centerX - (SLIDER_WIDTH / 2), y, SLIDER_WIDTH, CONTROL_HEIGHT,
-            lookDeadzone, 0.0F, 0.40F
+            rightStickDeadzone, 0.0F, 0.40F
         ) {
             @Override
             protected String label(float value) {
-                return String.format(Locale.ROOT, "Look Deadzone: %.2f", value);
+                return "Right Stick Deadzone";
+            }
+
+            @Override
+            protected String valueText(float value) {
+                return String.format(Locale.ROOT, "%.2f", value);
             }
 
             @Override
             protected void onValueChanged(float value) {
-                lookDeadzone = value;
-                markDirty();
+                rightStickDeadzone = value;
+                onMutableChange();
             }
         };
-        addScrollableChild(lookDeadzoneSlider, y);
-        y += 22;
-
-        sensitivityXSlider = new ConfigSlider(
-            centerX - (SLIDER_WIDTH / 2), y, SLIDER_WIDTH, CONTROL_HEIGHT,
-            lookSensitivityX, 1.0F, 80.0F
-        ) {
-            @Override
-            protected String label(float value) {
-                return String.format(Locale.ROOT, "Look Sensitivity X: %.1f", value);
-            }
-
-            @Override
-            protected void onValueChanged(float value) {
-                lookSensitivityX = value;
-                markDirty();
-            }
-        };
-        addScrollableChild(sensitivityXSlider, y);
-        y += 22;
-
-        sensitivityYSlider = new ConfigSlider(
-            centerX - (SLIDER_WIDTH / 2), y, SLIDER_WIDTH, CONTROL_HEIGHT,
-            lookSensitivityY, 1.0F, 80.0F
-        ) {
-            @Override
-            protected String label(float value) {
-                return String.format(Locale.ROOT, "Look Sensitivity Y: %.1f", value);
-            }
-
-            @Override
-            protected void onValueChanged(float value) {
-                lookSensitivityY = value;
-                markDirty();
-            }
-        };
-        addScrollableChild(sensitivityYSlider, y);
-        y += 22;
-
-        lookSpeedSlider = new ConfigSlider(
-            centerX - (SLIDER_WIDTH / 2), y, SLIDER_WIDTH, CONTROL_HEIGHT,
-            lookSpeedMultiplier, 0.5F, 4.0F
-        ) {
-            @Override
-            protected String label(float value) {
-                return String.format(Locale.ROOT, "Look Speed Multiplier: %.2f", value);
-            }
-
-            @Override
-            protected void onValueChanged(float value) {
-                lookSpeedMultiplier = value;
-                markDirty();
-            }
-        };
-        addScrollableChild(lookSpeedSlider, y);
+        addScrollableChild(
+            rightDeadzoneSlider,
+            y,
+            inputCategory,
+            "Controls how much right-stick movement is ignored near center."
+        );
         y += 22;
 
         triggerThresholdSlider = new ConfigSlider(
@@ -173,70 +168,172 @@ public final class BetterControllerSettingsScreen extends Screen {
         ) {
             @Override
             protected String label(float value) {
-                return String.format(Locale.ROOT, "Trigger Threshold: %.2f", value);
+                return "Trigger Threshold";
+            }
+
+            @Override
+            protected String valueText(float value) {
+                return String.format(Locale.ROOT, "%.2f", value);
             }
 
             @Override
             protected void onValueChanged(float value) {
                 triggerThreshold = value;
-                markDirty();
+                onMutableChange();
             }
         };
-        addScrollableChild(triggerThresholdSlider, y);
+        addScrollableChild(
+            triggerThresholdSlider,
+            y,
+            inputCategory,
+            "Sets how far triggers must be pressed before actions fire."
+        );
         y += 22;
 
-        menuAxisThresholdSlider = new ConfigSlider(
+        menuThresholdSlider = new ConfigSlider(
             centerX - (SLIDER_WIDTH / 2), y, SLIDER_WIDTH, CONTROL_HEIGHT,
             menuAxisThreshold, 0.2F, 0.8F
         ) {
             @Override
             protected String label(float value) {
-                return String.format(Locale.ROOT, "Menu Stick Threshold: %.2f", value);
+                return "Menu Stick Threshold";
+            }
+
+            @Override
+            protected String valueText(float value) {
+                return String.format(Locale.ROOT, "%.2f", value);
             }
 
             @Override
             protected void onValueChanged(float value) {
                 menuAxisThreshold = value;
-                markDirty();
+                onMutableChange();
             }
         };
-        addScrollableChild(menuAxisThresholdSlider, y);
-        y += 22;
+        addScrollableChild(
+            menuThresholdSlider,
+            y,
+            inputCategory,
+            "Higher values reduce accidental menu movement from analog drift."
+        );
+        y += SECTION_GAP;
 
-        menuInitialDelaySlider = new ConfigSlider(
+        y = addSectionHeader(
+            "Camera",
+            "Look response, sensitivity, smoothing, and inversion.",
+            y
+        );
+
+        antiDeadzoneSlider = new ConfigSlider(
             centerX - (SLIDER_WIDTH / 2), y, SLIDER_WIDTH, CONTROL_HEIGHT,
-            menuInitialRepeatDelayMs, 60.0F, 350.0F
+            lookAntiDeadzone, 0.0F, 0.20F
         ) {
             @Override
             protected String label(float value) {
-                return "Menu Initial Repeat Delay: " + Math.round(value) + " ms";
+                return "Look Anti-Deadzone";
+            }
+
+            @Override
+            protected String valueText(float value) {
+                return String.format(Locale.ROOT, "%.3f", value);
             }
 
             @Override
             protected void onValueChanged(float value) {
-                menuInitialRepeatDelayMs = Math.round(value);
-                markDirty();
+                lookAntiDeadzone = value;
+                onMutableChange();
             }
         };
-        addScrollableChild(menuInitialDelaySlider, y);
+        addScrollableChild(
+            antiDeadzoneSlider,
+            y,
+            cameraCategory,
+            "Adds a minimum look response to keep aiming responsive after deadzone."
+        );
         y += 22;
 
-        menuRepeatIntervalSlider = new ConfigSlider(
+        sensitivityXSlider = new ConfigSlider(
             centerX - (SLIDER_WIDTH / 2), y, SLIDER_WIDTH, CONTROL_HEIGHT,
-            menuRepeatIntervalMs, 20.0F, 140.0F
+            lookSensitivityX, 1.0F, 80.0F
         ) {
             @Override
             protected String label(float value) {
-                return "Menu Repeat Interval: " + Math.round(value) + " ms";
+                return "X Look Sensitivity";
+            }
+
+            @Override
+            protected String valueText(float value) {
+                return String.format(Locale.ROOT, "%.1f", value);
             }
 
             @Override
             protected void onValueChanged(float value) {
-                menuRepeatIntervalMs = Math.round(value);
-                markDirty();
+                lookSensitivityX = value;
+                onMutableChange();
             }
         };
-        addScrollableChild(menuRepeatIntervalSlider, y);
+        addScrollableChild(
+            sensitivityXSlider,
+            y,
+            cameraCategory,
+            "Horizontal camera speed."
+        );
+        y += 22;
+
+        sensitivityYSlider = new ConfigSlider(
+            centerX - (SLIDER_WIDTH / 2), y, SLIDER_WIDTH, CONTROL_HEIGHT,
+            lookSensitivityY, 1.0F, 80.0F
+        ) {
+            @Override
+            protected String label(float value) {
+                return "Y Look Sensitivity";
+            }
+
+            @Override
+            protected String valueText(float value) {
+                return String.format(Locale.ROOT, "%.1f", value);
+            }
+
+            @Override
+            protected void onValueChanged(float value) {
+                lookSensitivityY = value;
+                onMutableChange();
+            }
+        };
+        addScrollableChild(
+            sensitivityYSlider,
+            y,
+            cameraCategory,
+            "Vertical camera speed."
+        );
+        y += 22;
+
+        speedSlider = new ConfigSlider(
+            centerX - (SLIDER_WIDTH / 2), y, SLIDER_WIDTH, CONTROL_HEIGHT,
+            lookSpeedMultiplier, 0.5F, 4.0F
+        ) {
+            @Override
+            protected String label(float value) {
+                return "Camera Turn Multiplier";
+            }
+
+            @Override
+            protected String valueText(float value) {
+                return String.format(Locale.ROOT, "%.2f", value);
+            }
+
+            @Override
+            protected void onValueChanged(float value) {
+                lookSpeedMultiplier = value;
+                onMutableChange();
+            }
+        };
+        addScrollableChild(
+            speedSlider,
+            y,
+            cameraCategory,
+            "Global multiplier for right-stick camera turning speed."
+        );
         y += 22;
 
         smoothingStrengthSlider = new ConfigSlider(
@@ -245,35 +342,53 @@ public final class BetterControllerSettingsScreen extends Screen {
         ) {
             @Override
             protected String label(float value) {
-                return String.format(Locale.ROOT, "Camera Smoothing Strength: %.2f", value);
+                return "Camera Smoothing Amount";
+            }
+
+            @Override
+            protected String valueText(float value) {
+                return String.format(Locale.ROOT, "%.2f", value);
             }
 
             @Override
             protected void onValueChanged(float value) {
                 cameraSmoothingStrength = value;
-                markDirty();
+                onMutableChange();
             }
         };
-        addScrollableChild(smoothingStrengthSlider, y);
+        addScrollableChild(
+            smoothingStrengthSlider,
+            y,
+            cameraCategory,
+            "Blends camera movement to reduce jitter near deadzone."
+        );
         y += 26;
 
-        hudToggleButton = addScrollableChild(ButtonWidget.builder(
-            Text.literal(hudToggleLabel()),
+        invertYToggleButton = addScrollableChild(ButtonWidget.builder(
+            Text.literal(invertYLabel()),
             button -> {
-                hudHintsEnabled = !hudHintsEnabled;
-                button.setMessage(Text.literal(hudToggleLabel()));
-                markDirty();
+                invertLookY = !invertLookY;
+                button.setMessage(Text.literal(invertYLabel()));
+                onMutableChange();
             }
-        ).dimensions(centerX - 140, y, 136, CONTROL_HEIGHT).build(), y);
+        ).dimensions(centerX - 143, y, 140, CONTROL_HEIGHT).build(),
+            y,
+            cameraCategory,
+            "Inverts vertical camera axis."
+        );
 
         smoothingToggleButton = addScrollableChild(ButtonWidget.builder(
             Text.literal(smoothingToggleLabel()),
             button -> {
                 cameraSmoothing = !cameraSmoothing;
                 button.setMessage(Text.literal(smoothingToggleLabel()));
-                markDirty();
+                onMutableChange();
             }
-        ).dimensions(centerX + 4, y, 136, CONTROL_HEIGHT).build(), y);
+        ).dimensions(centerX + 3, y, 140, CONTROL_HEIGHT).build(),
+            y,
+            cameraCategory,
+            "Enables camera smoothing for stick look input."
+        );
         y += 24;
 
         responseCurveButton = addScrollableChild(ButtonWidget.builder(
@@ -281,48 +396,110 @@ public final class BetterControllerSettingsScreen extends Screen {
             button -> {
                 lookResponseCurve = nextCurve(lookResponseCurve);
                 button.setMessage(Text.literal(responseCurveLabel()));
-                markDirty();
+                onMutableChange();
             }
-        ).dimensions(centerX - 140, y, 280, CONTROL_HEIGHT).build(), y);
+        ).dimensions(centerX - 143, y, 286, CONTROL_HEIGHT).build(),
+            y,
+            cameraCategory,
+            "Changes right-stick curve: linear, light exponential, or strong exponential."
+        );
+        y += SECTION_GAP;
+
+        y = addSectionHeader(
+            "Interface",
+            "HUD hints, diagnostics overlay, and quick presets.",
+            y
+        );
+
+        hudToggleButton = addScrollableChild(ButtonWidget.builder(
+            Text.literal(hudToggleLabel()),
+            button -> {
+                hudHintsEnabled = !hudHintsEnabled;
+                button.setMessage(Text.literal(hudToggleLabel()));
+                onMutableChange();
+            }
+        ).dimensions(centerX - 143, y, 140, CONTROL_HEIGHT).build(),
+            y,
+            interfaceCategory,
+            "Shows contextual controller hints in-game."
+        );
+
+        debugOverlayButton = addScrollableChild(ButtonWidget.builder(
+            Text.literal(debugOverlayLabel()),
+            button -> {
+                debugOverlayEnabled = !debugOverlayEnabled;
+                button.setMessage(Text.literal(debugOverlayLabel()));
+                onMutableChange();
+            }
+        ).dimensions(centerX + 3, y, 140, CONTROL_HEIGHT).build(),
+            y,
+            interfaceCategory,
+            "Enables the in-game diagnostics overlay."
+        );
+        y += 24;
+
+        addPresetButtons(centerX, y, interfaceCategory);
         y += 24;
 
         addScrollableChild(ButtonWidget.builder(
-            Text.literal("Ultra Fluid Preset"),
-            button -> applyUltraFluidPresetLocally()
-        ).dimensions(centerX - 140, y, 136, CONTROL_HEIGHT).build(), y);
+            Text.literal("Reset Defaults"),
+            button -> resetDefaultsNow()
+        ).dimensions(centerX - 143, y, 140, CONTROL_HEIGHT).build(),
+            y,
+            interfaceCategory,
+            "Restores all controller settings to safe defaults."
+        );
 
         addScrollableChild(ButtonWidget.builder(
-            Text.literal("Apply"),
+            Text.literal("Apply Changes"),
             button -> applyChanges("Controller settings applied.", 0xFF9FE870)
-        ).dimensions(centerX + 4, y, 136, CONTROL_HEIGHT).build(), y);
+        ).dimensions(centerX + 3, y, 140, CONTROL_HEIGHT).build(),
+            y,
+            interfaceCategory,
+            "Saves your current tuning to disk."
+        );
 
         doneButton = addDrawableChild(ButtonWidget.builder(
             Text.literal("Done"),
             button -> close()
-        ).dimensions(centerX - 140, this.height - 26, 280, CONTROL_HEIGHT).build());
+        ).dimensions(centerX - 143, this.height - 26, 286, CONTROL_HEIGHT).build());
+        widgetCategories.put(doneButton, "Interface");
+        widgetHints.put(doneButton, "Close settings and keep your latest controller tuning.");
 
         recalculateScrollBounds();
         updateScrollPositions();
+        syncWidgetsFromState();
     }
 
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        renderBackground(context, mouseX, mouseY, delta);
+        renderSafeBackground(context);
         super.render(context, mouseX, mouseY, delta);
 
         int centerX = this.width / 2;
         context.drawCenteredTextWithShadow(this.textRenderer, this.title, centerX, 12, 0xFFFFFFFF);
         context.drawCenteredTextWithShadow(
             this.textRenderer,
-            Text.literal("Pro controller tuning (camera, menu navigation, HUD)"),
+            Text.literal("Console-grade analog tuning, glyphs, and diagnostics."),
             centerX,
-            22,
+            24,
             0xFFB8C1CC
         );
+        context.drawCenteredTextWithShadow(
+            this.textRenderer,
+            Text.literal("Active Preset: " + ControllerPreset.fromId(activePresetId).displayName()),
+            centerX,
+            34,
+            0xFFDDE7F2
+        );
+
+        renderLiveInputPreview(context, centerX, 46);
+        renderSectionHeaders(context, centerX);
+        renderFocusedHelp(context, centerX);
 
         if (maxScrollOffset > 0) {
             if (scrollOffset > 0) {
-                context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("^"), centerX, CONTENT_TOP - 12, 0xFFAAB4C0);
+                context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("^"), centerX, CONTENT_TOP - 10, 0xFFAAB4C0);
             }
             if (scrollOffset < maxScrollOffset) {
                 context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("v"), centerX, this.height - CONTENT_BOTTOM_MARGIN + 4, 0xFFAAB4C0);
@@ -334,10 +511,18 @@ public final class BetterControllerSettingsScreen extends Screen {
                 this.textRenderer,
                 Text.literal(statusMessage),
                 centerX,
-                this.height - 40,
+                this.height - 52,
                 statusColor
             );
         }
+    }
+
+    private void renderSafeBackground(DrawContext context) {
+        // Avoid Screen#renderBackground blur path here: this screen is rendered inside a pipeline
+        // where another blur pass can already be active in the same frame.
+        context.fill(0, 0, this.width, this.height, 0xCC0D1118);
+        context.fill(0, 0, this.width, 48, 0x88171E2B);
+        context.fill(0, this.height - 52, this.width, this.height, 0x88262D3A);
     }
 
     @Override
@@ -402,43 +587,88 @@ public final class BetterControllerSettingsScreen extends Screen {
         scrollBy(delta);
     }
 
-    private void applyUltraFluidPresetLocally() {
-        movementDeadzone = 0.08F;
-        lookDeadzone = 0.03F;
-        lookSensitivityX = 18.0F;
-        lookSensitivityY = 16.5F;
-        lookSpeedMultiplier = 2.6F;
-        triggerThreshold = 0.30F;
-        menuAxisThreshold = 0.30F;
-        menuInitialRepeatDelayMs = 100;
-        menuRepeatIntervalMs = 38;
-        lookResponseCurve = "linear";
-        cameraSmoothing = false;
-        cameraSmoothingStrength = 0.12F;
-        hudHintsEnabled = true;
+    private int addSectionHeader(String title, String subtitle, int baseY) {
+        sectionHeaders.add(new SectionHeader(title, subtitle, baseY));
+        return baseY + SECTION_HEADER_HEIGHT;
+    }
 
+    private void renderSectionHeaders(DrawContext context, int centerX) {
+        int left = centerX - (SLIDER_WIDTH / 2);
+        int right = centerX + (SLIDER_WIDTH / 2);
+        int clipTop = CONTENT_TOP - 14;
+        int clipBottom = this.height - CONTENT_BOTTOM_MARGIN + 8;
+
+        for (SectionHeader header : sectionHeaders) {
+            int y = header.baseY() - scrollOffset;
+            if (y < clipTop || y > clipBottom) {
+                continue;
+            }
+            context.fill(left, y - 1, right, y + 14, 0x3A23364B);
+            context.fill(left, y + 13, right, y + 14, 0x665B7FA2);
+            context.drawTextWithShadow(this.textRenderer, header.title(), left + 6, y + 3, 0xFFE9F2FC);
+            if (header.subtitle() != null && !header.subtitle().isBlank()) {
+                context.drawTextWithShadow(this.textRenderer, header.subtitle(), left + 96, y + 3, 0xFFB3C5D8);
+            }
+        }
+    }
+
+    private void renderFocusedHelp(DrawContext context, int centerX) {
+        String category = "General";
+        String hint = "Adjust values with left/right, confirm with A, back with B.";
+        if (this.getFocused() instanceof ClickableWidget focusedWidget) {
+            category = widgetCategories.getOrDefault(focusedWidget, category);
+            hint = widgetHints.getOrDefault(focusedWidget, hint);
+        }
+
+        int left = centerX - 220;
+        int right = centerX + 220;
+        int top = this.height - 66;
+        int bottom = this.height - 44;
+        context.fill(left, top, right, bottom, 0x8A0D131D);
+        context.fill(left, top, right, top + 1, 0x66456A90);
+        context.drawTextWithShadow(this.textRenderer, "Category: " + category, left + 8, top + 4, 0xFFE2ECF8);
+        context.drawTextWithShadow(this.textRenderer, fitToWidth(hint, 430), left + 8, top + 13, 0xFFBCCBDA);
+    }
+
+    private void addPresetButtons(int centerX, int y, String category) {
+        int buttonWidth = 68;
+        int gap = 4;
+        int rowX = centerX - 143;
+        ControllerPreset[] presets = ControllerPreset.values();
+        for (int i = 0; i < presets.length; i++) {
+            ControllerPreset preset = presets[i];
+            int x = rowX + (i * (buttonWidth + gap));
+            addScrollableChild(ButtonWidget.builder(
+                Text.literal(preset.displayName()),
+                button -> applyPresetNow(preset)
+            ).dimensions(x, y, buttonWidth, CONTROL_HEIGHT).build(),
+                y,
+                category,
+                "Applies the " + preset.displayName() + " tuning preset."
+            );
+        }
+    }
+
+    private void applyPresetNow(ControllerPreset preset) {
+        runtime.applyPreset(preset);
+        loadFromConfig();
         syncWidgetsFromState();
-        markDirty();
-        statusMessage = "Ultra fluid preset loaded. Click Apply or Done.";
+        dirty = false;
+        statusMessage = preset.displayName() + " preset applied.";
         statusColor = 0xFF7DD3FC;
     }
 
+    private void resetDefaultsNow() {
+        runtime.resetToDefaults();
+        loadFromConfig();
+        syncWidgetsFromState();
+        dirty = false;
+        statusMessage = "Controller config reset to defaults.";
+        statusColor = 0xFFEFC56F;
+    }
+
     private void applyChanges(String message, int color) {
-        runtime.updateConfig(config -> {
-            config.movementDeadzone = movementDeadzone;
-            config.lookDeadzone = lookDeadzone;
-            config.lookSensitivityX = lookSensitivityX;
-            config.lookSensitivityY = lookSensitivityY;
-            config.lookSpeedMultiplier = lookSpeedMultiplier;
-            config.triggerThreshold = triggerThreshold;
-            config.menuAxisThreshold = menuAxisThreshold;
-            config.menuInitialRepeatDelayMs = menuInitialRepeatDelayMs;
-            config.menuRepeatIntervalMs = menuRepeatIntervalMs;
-            config.cameraSmoothing = cameraSmoothing;
-            config.cameraSmoothingStrength = cameraSmoothingStrength;
-            config.lookResponseCurve = lookResponseCurve;
-            config.hudHintsEnabled = hudHintsEnabled;
-        });
+        runtime.updateConfig(this::applyStateToConfig);
         dirty = false;
         statusMessage = message;
         statusColor = color;
@@ -449,41 +679,113 @@ public final class BetterControllerSettingsScreen extends Screen {
         if (config == null) {
             config = ControllerConfig.createDefault();
         }
-        movementDeadzone = config.movementDeadzone;
-        lookDeadzone = config.lookDeadzone;
+
+        leftStickDeadzone = config.movementDeadzone;
+        rightStickDeadzone = config.lookDeadzone;
+        lookAntiDeadzone = config.lookAntiDeadzone;
         lookSensitivityX = config.lookSensitivityX;
         lookSensitivityY = config.lookSensitivityY;
         lookSpeedMultiplier = config.lookSpeedMultiplier;
+        invertLookY = config.invertLookY;
         triggerThreshold = config.triggerThreshold;
         menuAxisThreshold = config.menuAxisThreshold;
-        menuInitialRepeatDelayMs = config.menuInitialRepeatDelayMs;
-        menuRepeatIntervalMs = config.menuRepeatIntervalMs;
         cameraSmoothing = config.cameraSmoothing;
         cameraSmoothingStrength = config.cameraSmoothingStrength;
         lookResponseCurve = config.lookResponseCurve == null || config.lookResponseCurve.isBlank()
             ? "linear"
             : config.lookResponseCurve;
         hudHintsEnabled = config.hudHintsEnabled;
+        debugOverlayEnabled = config.debugOverlayEnabled;
+        activePresetId = ControllerPreset.fromId(config.activePreset).id();
     }
 
     private void syncWidgetsFromState() {
-        if (movementDeadzoneSlider != null) movementDeadzoneSlider.setCurrentValue(movementDeadzone);
-        if (lookDeadzoneSlider != null) lookDeadzoneSlider.setCurrentValue(lookDeadzone);
+        syncingWidgets = true;
+        if (leftDeadzoneSlider != null) leftDeadzoneSlider.setCurrentValue(leftStickDeadzone);
+        if (rightDeadzoneSlider != null) rightDeadzoneSlider.setCurrentValue(rightStickDeadzone);
+        if (antiDeadzoneSlider != null) antiDeadzoneSlider.setCurrentValue(lookAntiDeadzone);
         if (sensitivityXSlider != null) sensitivityXSlider.setCurrentValue(lookSensitivityX);
         if (sensitivityYSlider != null) sensitivityYSlider.setCurrentValue(lookSensitivityY);
-        if (lookSpeedSlider != null) lookSpeedSlider.setCurrentValue(lookSpeedMultiplier);
+        if (speedSlider != null) speedSlider.setCurrentValue(lookSpeedMultiplier);
         if (triggerThresholdSlider != null) triggerThresholdSlider.setCurrentValue(triggerThreshold);
-        if (menuAxisThresholdSlider != null) menuAxisThresholdSlider.setCurrentValue(menuAxisThreshold);
-        if (menuInitialDelaySlider != null) menuInitialDelaySlider.setCurrentValue(menuInitialRepeatDelayMs);
-        if (menuRepeatIntervalSlider != null) menuRepeatIntervalSlider.setCurrentValue(menuRepeatIntervalMs);
+        if (menuThresholdSlider != null) menuThresholdSlider.setCurrentValue(menuAxisThreshold);
         if (smoothingStrengthSlider != null) smoothingStrengthSlider.setCurrentValue(cameraSmoothingStrength);
+        syncingWidgets = false;
+
+        if (invertYToggleButton != null) invertYToggleButton.setMessage(Text.literal(invertYLabel()));
         if (hudToggleButton != null) hudToggleButton.setMessage(Text.literal(hudToggleLabel()));
+        if (debugOverlayButton != null) debugOverlayButton.setMessage(Text.literal(debugOverlayLabel()));
         if (smoothingToggleButton != null) smoothingToggleButton.setMessage(Text.literal(smoothingToggleLabel()));
         if (responseCurveButton != null) responseCurveButton.setMessage(Text.literal(responseCurveLabel()));
     }
 
+    private void renderLiveInputPreview(DrawContext context, int centerX, int y) {
+        ControllerSnapshot snapshot = runtime.latestSnapshot();
+        GameplayInputFrame frame = runtime.latestFrame();
+
+        if (snapshot == null || !snapshot.isConnected() || frame == null) {
+            context.drawCenteredTextWithShadow(
+                this.textRenderer,
+                Text.literal("Input Test: connect a controller to preview stick and trigger values."),
+                centerX,
+                y,
+                0xFFA8B4C2
+            );
+            return;
+        }
+
+        String lineOne = "Input Test: "
+            + runtime.activeControllerType()
+            + " | Glyphs: "
+            + runtime.glyphs().activeGlyphSetName()
+            + " | Preset: "
+            + ControllerPreset.fromId(activePresetId).displayName();
+        context.drawCenteredTextWithShadow(this.textRenderer, Text.literal(lineOne), centerX, y, 0xFFD7E3EF);
+
+        String lineTwo = String.format(
+            Locale.ROOT,
+            "LS(%.2f, %.2f) RS(%.2f, %.2f) LT %.2f RT %.2f | %s",
+            snapshot.axis(ControllerAxis.LEFT_X),
+            snapshot.axis(ControllerAxis.LEFT_Y),
+            snapshot.axis(ControllerAxis.RIGHT_X),
+            snapshot.axis(ControllerAxis.RIGHT_Y),
+            normalizeTrigger(snapshot.axis(ControllerAxis.LEFT_TRIGGER)),
+            normalizeTrigger(snapshot.axis(ControllerAxis.RIGHT_TRIGGER)),
+            pressedButtonsPreview(snapshot)
+        );
+        context.drawCenteredTextWithShadow(this.textRenderer, Text.literal(lineTwo), centerX, y + 10, 0xFFC4D3E0);
+    }
+
+    private String pressedButtonsPreview(ControllerSnapshot snapshot) {
+        StringBuilder builder = new StringBuilder();
+        int shown = 0;
+        for (ControllerButton button : ControllerButton.values()) {
+            if (!snapshot.isPressed(button)) {
+                continue;
+            }
+            if (builder.length() > 0) {
+                builder.append(", ");
+            }
+            builder.append(runtime.glyphs().glyphForButton(button));
+            shown++;
+            if (shown >= 5) {
+                builder.append(", ...");
+                break;
+            }
+        }
+        return builder.length() == 0 ? "Buttons: none" : "Buttons: " + builder;
+    }
+
+    private String invertYLabel() {
+        return invertLookY ? "Invert Y: ON" : "Invert Y: OFF";
+    }
+
     private String hudToggleLabel() {
-        return hudHintsEnabled ? "HUD: ON" : "HUD: OFF";
+        return hudHintsEnabled ? "HUD Hints: ON" : "HUD Hints: OFF";
+    }
+
+    private String debugOverlayLabel() {
+        return debugOverlayEnabled ? "Diagnostics: ON" : "Diagnostics: OFF";
     }
 
     private String smoothingToggleLabel() {
@@ -494,17 +796,64 @@ public final class BetterControllerSettingsScreen extends Screen {
         return "Look Curve: " + lookResponseCurve;
     }
 
+    private void onMutableChange() {
+        if (syncingWidgets) {
+            return;
+        }
+        markDirty();
+        pushLivePreview();
+    }
+
     private void markDirty() {
         dirty = true;
-        if (statusMessage.isBlank()) {
-            statusMessage = "Unsaved changes.";
-            statusColor = 0xFFEFC56F;
+        statusMessage = "Unsaved changes.";
+        statusColor = 0xFFEFC56F;
+    }
+
+    private void pushLivePreview() {
+        runtime.previewConfig(this::applyStateToConfig);
+    }
+
+    private void applyStateToConfig(ControllerConfig config) {
+        if (config == null) {
+            return;
         }
+        config.movementDeadzone = leftStickDeadzone;
+        config.lookDeadzone = rightStickDeadzone;
+        config.lookAntiDeadzone = lookAntiDeadzone;
+        config.lookSensitivityX = lookSensitivityX;
+        config.lookSensitivityY = lookSensitivityY;
+        config.lookSpeedMultiplier = lookSpeedMultiplier;
+        config.invertLookY = invertLookY;
+        config.triggerThreshold = triggerThreshold;
+        config.menuAxisThreshold = menuAxisThreshold;
+        config.cameraSmoothing = cameraSmoothing;
+        config.cameraSmoothingStrength = cameraSmoothingStrength;
+        config.lookResponseCurve = lookResponseCurve;
+        config.hudHintsEnabled = hudHintsEnabled;
+        config.debugOverlayEnabled = debugOverlayEnabled;
+        config.activePreset = activePresetId;
     }
 
     private <T extends ClickableWidget> T addScrollableChild(T widget, int baseY) {
         addDrawableChild(widget);
         scrollEntries.add(new ScrollEntry(widget, baseY));
+        return widget;
+    }
+
+    private <T extends ClickableWidget> T addScrollableChild(
+        T widget,
+        int baseY,
+        String category,
+        String hint
+    ) {
+        addScrollableChild(widget, baseY);
+        if (category != null && !category.isBlank()) {
+            widgetCategories.put(widget, category);
+        }
+        if (hint != null && !hint.isBlank()) {
+            widgetHints.put(widget, hint);
+        }
         return widget;
     }
 
@@ -539,6 +888,25 @@ public final class BetterControllerSettingsScreen extends Screen {
         return true;
     }
 
+    private String fitToWidth(String text, int maxWidth) {
+        if (text == null || text.isBlank() || this.textRenderer == null) {
+            return "";
+        }
+        if (this.textRenderer.getWidth(text) <= maxWidth) {
+            return text;
+        }
+        String ellipsis = "...";
+        int length = text.length();
+        while (length > 1) {
+            String candidate = text.substring(0, length) + ellipsis;
+            if (this.textRenderer.getWidth(candidate) <= maxWidth) {
+                return candidate;
+            }
+            length--;
+        }
+        return ellipsis;
+    }
+
     private static String nextCurve(String current) {
         String normalized = current == null ? "linear" : current.toLowerCase(Locale.ROOT);
         return switch (normalized) {
@@ -548,7 +916,12 @@ public final class BetterControllerSettingsScreen extends Screen {
         };
     }
 
-    private static abstract class ConfigSlider extends SliderWidget {
+    private static float normalizeTrigger(float value) {
+        float normalized = (value + 1.0F) * 0.5F;
+        return Math.max(0.0F, Math.min(1.0F, normalized));
+    }
+
+    private abstract static class ConfigSlider extends SliderWidget {
         private final float min;
         private final float max;
 
@@ -569,6 +942,46 @@ public final class BetterControllerSettingsScreen extends Screen {
             onValueChanged(currentValue());
         }
 
+        @Override
+        public void renderWidget(DrawContext context, int mouseX, int mouseY, float delta) {
+            int left = getX();
+            int top = getY();
+            int right = left + getWidth();
+            int bottom = top + getHeight();
+            boolean focused = isFocused();
+
+            int borderColor = focused ? 0xFF95C6F1 : 0x88516B85;
+            int backgroundColor = focused ? 0x8F1A2C40 : 0x85101B2A;
+            context.fill(left - 1, top - 1, right + 1, bottom + 1, borderColor);
+            context.fill(left, top, right, bottom, backgroundColor);
+
+            super.renderWidget(context, mouseX, mouseY, delta);
+
+            MinecraftClient client = MinecraftClient.getInstance();
+            if (client == null) {
+                return;
+            }
+            String valueLabel = valueText(currentValue());
+            int labelWidth = client.textRenderer.getWidth(valueLabel);
+            int badgeWidth = labelWidth + 8;
+            int badgeLeft = right - badgeWidth - 4;
+            int badgeTop = top + 3;
+            context.fill(
+                badgeLeft,
+                badgeTop,
+                badgeLeft + badgeWidth,
+                badgeTop + 13,
+                focused ? 0xAA30516F : 0x9920354A
+            );
+            context.drawCenteredTextWithShadow(
+                client.textRenderer,
+                Text.literal(valueLabel),
+                badgeLeft + (badgeWidth / 2),
+                badgeTop + 2,
+                0xFFEAF5FF
+            );
+        }
+
         protected void setCurrentValue(float newValue) {
             this.value = normalize(newValue, min, max);
             updateMessage();
@@ -577,6 +990,10 @@ public final class BetterControllerSettingsScreen extends Screen {
 
         protected float currentValue() {
             return (float) (min + (max - min) * value);
+        }
+
+        protected String valueText(float value) {
+            return String.format(Locale.ROOT, "%.2f", value);
         }
 
         private static double normalize(float v, float min, float max) {
@@ -589,13 +1006,9 @@ public final class BetterControllerSettingsScreen extends Screen {
         protected abstract void onValueChanged(float value);
     }
 
-    private static final class ScrollEntry {
-        private final ClickableWidget widget;
-        private final int baseY;
+    private record SectionHeader(String title, String subtitle, int baseY) {
+    }
 
-        private ScrollEntry(ClickableWidget widget, int baseY) {
-            this.widget = widget;
-            this.baseY = baseY;
-        }
+    private record ScrollEntry(ClickableWidget widget, int baseY) {
     }
 }

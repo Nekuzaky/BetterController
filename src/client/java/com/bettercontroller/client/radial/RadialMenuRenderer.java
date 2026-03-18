@@ -12,13 +12,14 @@ public final class RadialMenuRenderer {
         int centerX = context.getScaledWindowWidth() / 2;
         int centerY = context.getScaledWindowHeight() / 2;
         int radius = 64;
-        int slotWidth = 46;
         int slotHeight = 16;
 
         context.fill(centerX - 88, centerY - 88, centerX + 88, centerY + 88, 0x7F000000);
 
         int slotCount = radialMenu.slots().size();
         for (int i = 0; i < slotCount; i++) {
+            String label = radialMenu.slots().get(i).label();
+            int slotWidth = Math.max(48, Math.min(108, client.textRenderer.getWidth(label) + 10));
             double angle = ((Math.PI * 2.0D) / slotCount) * i;
             int x = centerX + (int) (Math.cos(angle) * radius) - (slotWidth / 2);
             int y = centerY - (int) (Math.sin(angle) * radius) - (slotHeight / 2);
@@ -31,7 +32,7 @@ public final class RadialMenuRenderer {
             context.drawStrokedRectangle(x, y, slotWidth, slotHeight, borderColor);
             context.drawCenteredTextWithShadow(
                 client.textRenderer,
-                radialMenu.slots().get(i).label(),
+                label,
                 x + (slotWidth / 2),
                 y + 4,
                 0xFFFFFFFF

@@ -10,18 +10,21 @@ import java.util.Locale;
 import java.util.Map;
 
 public final class ControllerConfig {
-    public int schemaVersion = 5;
+    public int schemaVersion = 6;
     public boolean autoActivateOnController = true;
     public boolean autoSwitchLayoutByControllerType = true;
     public String activeLayout = "xbox";
+    public String activePreset = "console";
     public LinkedHashMap<String, String> controllerTypeLayouts = defaultControllerTypeLayouts();
 
     public float movementDeadzone = 0.14F;
     public float lookDeadzone = 0.07F;
+    public float lookAntiDeadzone = 0.02F;
     public float lookSensitivityX = 12.0F;
     public float lookSensitivityY = 11.0F;
     public float lookSpeedMultiplier = 2.25F;
     public String lookResponseCurve = "linear";
+    public boolean invertLookY = false;
     public boolean cameraSmoothing = false;
     public float cameraSmoothingStrength = 0.35F;
     public float triggerThreshold = 0.45F;
@@ -51,6 +54,9 @@ public final class ControllerConfig {
         if (activeLayout == null || activeLayout.isBlank()) {
             activeLayout = fallback.activeLayout;
         }
+        if (activePreset == null || activePreset.isBlank()) {
+            activePreset = fallback.activePreset;
+        }
         if (controllerTypeLayouts == null || controllerTypeLayouts.isEmpty()) {
             controllerTypeLayouts = fallback.controllerTypeLayouts;
         }
@@ -71,6 +77,9 @@ public final class ControllerConfig {
         }
         if (lookSpeedMultiplier <= 0.0F) {
             lookSpeedMultiplier = fallback.lookSpeedMultiplier;
+        }
+        if (lookAntiDeadzone < 0.0F || lookAntiDeadzone > 0.25F) {
+            lookAntiDeadzone = fallback.lookAntiDeadzone;
         }
         if (menuAxisThreshold <= 0.0F) {
             menuAxisThreshold = fallback.menuAxisThreshold;

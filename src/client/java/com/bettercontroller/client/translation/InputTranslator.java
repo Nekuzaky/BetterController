@@ -22,20 +22,37 @@ public final class InputTranslator {
         float moveX = applyDeadzone(readAxis(snapshot, layout.axisToken("move_x")), config.movementDeadzone);
         float moveY = applyDeadzone(readAxis(snapshot, layout.axisToken("move_y")), config.movementDeadzone);
 
-        float lookX = applyDeadzone(readAxis(snapshot, layout.axisToken("look_x")), config.lookDeadzone);
-        float lookY = applyDeadzone(readAxis(snapshot, layout.axisToken("look_y")), config.lookDeadzone);
+        float lookX = applyLookDeadzone(
+            readAxis(snapshot, layout.axisToken("look_x")),
+            config.lookDeadzone,
+            config.lookAntiDeadzone
+        );
+        float lookY = applyLookDeadzone(
+            readAxis(snapshot, layout.axisToken("look_y")),
+            config.lookDeadzone,
+            config.lookAntiDeadzone
+        );
 
         lookX = applyResponseCurve(lookX, config.lookResponseCurve);
         lookY = applyResponseCurve(lookY, config.lookResponseCurve);
+        if (config.invertLookY) {
+            lookY = -lookY;
+        }
+
+        float centerStabilityThreshold = clamp(config.lookDeadzone * 0.16F, 0.003F, 0.035F);
+        lookX = suppressMicroJitter(lookX, smoothedLookX, centerStabilityThreshold);
+        lookY = suppressMicroJitter(lookY, smoothedLookY, centerStabilityThreshold);
 
         if (config.cameraSmoothing) {
-            float smoothing = clamp(config.cameraSmoothingStrength, 0.01F, 1.0F);
+            float smoothing = resolveAdaptiveSmoothing(config.cameraSmoothingStrength, lookX, lookY);
             smoothedLookX += (lookX - smoothedLookX) * smoothing;
             smoothedLookY += (lookY - smoothedLookY) * smoothing;
         } else {
             smoothedLookX = lookX;
             smoothedLookY = lookY;
         }
+        smoothedLookX = snapNearZero(smoothedLookX, 0.0008F);
+        smoothedLookY = snapNearZero(smoothedLookY, 0.0008F);
 
         boolean jumpPressed = isActionPressed(snapshot, config, layout, GameplayAction.JUMP);
         boolean sprintPressed = isActionPressed(snapshot, config, layout, GameplayAction.SPRINT);
@@ -204,6 +221,18 @@ public final class InputTranslator {
         return Math.copySign(scaled, value);
     }
 
+    private static float applyLookDeadzone(float value, float deadzone, float antiDeadzone) {
+        float absolute = Math.abs(value);
+        if (absolute < deadzone) {
+            return 0.0F;
+        }
+
+        float scaled = (absolute - deadzone) / (1.0F - deadzone);
+        float anti = clamp(antiDeadzone, 0.0F, 0.35F);
+        float adjusted = anti + (scaled * (1.0F - anti));
+        return Math.copySign(adjusted, value);
+    }
+
     private static float applyResponseCurve(float value, String curveType) {
         String curve = curveType == null ? "linear" : curveType.toLowerCase(Locale.ROOT);
         float absolute = Math.abs(value);
@@ -218,5 +247,33 @@ public final class InputTranslator {
 
     private static float clamp(float value, float min, float max) {
         return Math.max(min, Math.min(max, value));
+    }
+
+    private static float resolveAdaptiveSmoothing(float baseStrength, float lookX, float lookY) {
+        float base = clamp(baseStrength, 0.01F, 1.0F);
+        float magnitude = Math.max(Math.abs(lookX), Math.abs(lookY));
+        if (magnitude <= 0.50F) {
+            return base;
+        }
+        float responsivenessScale = 1.0F - ((magnitude - 0.50F) / 0.50F) * 0.55F;
+        return clamp(base * responsivenessScale, 0.08F, 1.0F);
+    }
+
+    private static float suppressMicroJitter(float value, float previousSmoothed, float threshold) {
+        float absolute = Math.abs(value);
+        if (absolute >= threshold) {
+            return value;
+        }
+        if (Math.abs(previousSmoothed) >= threshold * 1.25F) {
+            return value;
+        }
+        return 0.0F;
+    }
+
+    private static float snapNearZero(float value, float threshold) {
+        if (Math.abs(value) < threshold) {
+            return 0.0F;
+        }
+        return value;
     }
 }

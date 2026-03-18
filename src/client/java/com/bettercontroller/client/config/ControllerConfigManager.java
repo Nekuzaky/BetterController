@@ -3,6 +3,7 @@ package com.bettercontroller.client.config;
 import com.bettercontroller.BetterControllerMod;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.Strictness;
 import com.google.gson.stream.JsonReader;
 import net.fabricmc.loader.api.FabricLoader;
 
@@ -139,7 +140,7 @@ public final class ControllerConfigManager {
 
         try (Reader reader = Files.newBufferedReader(configPath, StandardCharsets.UTF_8)) {
             JsonReader jsonReader = new JsonReader(reader);
-            jsonReader.setLenient(true);
+            jsonReader.setStrictness(Strictness.LENIENT);
 
             ControllerConfig loaded = GSON.fromJson(jsonReader, ControllerConfig.class);
             if (loaded == null) {
@@ -175,6 +176,7 @@ public final class ControllerConfigManager {
     private static void sanitize(ControllerConfig config) {
         config.movementDeadzone = clamp(config.movementDeadzone, 0.0F, 0.95F, 0.14F);
         config.lookDeadzone = clamp(config.lookDeadzone, 0.0F, 0.95F, 0.07F);
+        config.lookAntiDeadzone = clamp(config.lookAntiDeadzone, 0.0F, 0.25F, 0.02F);
         config.lookSensitivityX = clamp(config.lookSensitivityX, 0.1F, 80.0F, 12.0F);
         config.lookSensitivityY = clamp(config.lookSensitivityY, 0.1F, 80.0F, 11.0F);
         config.lookSpeedMultiplier = clamp(config.lookSpeedMultiplier, 0.5F, 4.0F, 2.25F);
@@ -187,6 +189,7 @@ public final class ControllerConfigManager {
 
         config.lookResponseCurve = normalizeResponseCurve(config.lookResponseCurve);
         config.vibrationIntensity = normalizeVibrationIntensity(config.vibrationIntensity);
+        config.activePreset = ControllerPreset.fromId(config.activePreset).id();
     }
 
     private static boolean migrateLegacyDefaults(ControllerConfig config, int loadedSchemaVersion) {

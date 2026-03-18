@@ -1,6 +1,7 @@
 package com.bettercontroller.client.render;
 
 import com.bettercontroller.client.config.ControllerConfig;
+import com.bettercontroller.client.glyph.ControllerGlyphService;
 import com.bettercontroller.client.input.ControllerRuntime;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
@@ -8,7 +9,6 @@ import net.minecraft.util.hit.HitResult;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 
 public final class ControllerHUDRenderer {
     private static final int CHIP_HEIGHT = 12;
@@ -18,6 +18,10 @@ public final class ControllerHUDRenderer {
     public void render(MinecraftClient client, DrawContext context, ControllerRuntime runtime) {
         if (client == null || context == null || runtime == null) {
             return;
+        }
+        String runtimeStatus = runtime.runtimeStatusMessage();
+        if (!runtimeStatus.isBlank() && client.currentScreen == null) {
+            renderStatusBanner(client, context, runtimeStatus);
         }
 
         ControllerConfig config = runtime.latestConfig();
@@ -35,6 +39,7 @@ public final class ControllerHUDRenderer {
         if (layout == null) {
             return;
         }
+        ControllerGlyphService glyphs = runtime.glyphs();
 
         List<Prompt> prompts = buildPrompts(client, layout);
         if (prompts.isEmpty()) {
@@ -45,7 +50,7 @@ public final class ControllerHUDRenderer {
         int[] widths = new int[prompts.size()];
         for (int i = 0; i < prompts.size(); i++) {
             Prompt prompt = prompts.get(i);
-            String buttonText = "[" + displayBindingToken(prompt.button()) + "]";
+            String buttonText = "[" + glyphs.glyphForBinding(prompt.button()) + "]";
             int width = (CHIP_PADDING_X * 2)
                 + client.textRenderer.getWidth(buttonText)
                 + 4
@@ -64,7 +69,7 @@ public final class ControllerHUDRenderer {
         for (int i = 0; i < prompts.size(); i++) {
             Prompt prompt = prompts.get(i);
             int width = widths[i];
-            String buttonText = "[" + displayBindingToken(prompt.button()) + "]";
+            String buttonText = "[" + glyphs.glyphForBinding(prompt.button()) + "]";
 
             context.fill(x, y, x + width, y + CHIP_HEIGHT, 0x8C0B0F14);
             context.fill(x, y + CHIP_HEIGHT - 1, x + width, y + CHIP_HEIGHT, 0x664E647A);
@@ -97,30 +102,14 @@ public final class ControllerHUDRenderer {
         return layout.actionBindings(action).get(0);
     }
 
-    private static String displayBindingToken(String token) {
-        if (token == null || token.isBlank()) {
-            return "?";
-        }
-        String normalized = token.trim().toUpperCase(Locale.ROOT);
-        if (normalized.startsWith("-")) {
-            normalized = normalized.substring(1);
-        }
-        return switch (normalized) {
-            case "DPAD_UP" -> "D-UP";
-            case "DPAD_DOWN" -> "D-DOWN";
-            case "DPAD_LEFT" -> "D-LEFT";
-            case "DPAD_RIGHT" -> "D-RIGHT";
-            case "LEFT_TRIGGER" -> "LT";
-            case "RIGHT_TRIGGER" -> "RT";
-            case "LEFT_BUMPER" -> "LB";
-            case "RIGHT_BUMPER" -> "RB";
-            case "LEFT_STICK" -> "L3";
-            case "RIGHT_STICK" -> "R3";
-            default -> normalized
-                .replace("SWITCH_", "")
-                .replace("NINTENDO_", "")
-                .replace('_', ' ');
-        };
+    private static void renderStatusBanner(MinecraftClient client, DrawContext context, String message) {
+        int textWidth = client.textRenderer.getWidth(message);
+        int width = textWidth + 16;
+        int x = (context.getScaledWindowWidth() - width) / 2;
+        int y = 14;
+        context.fill(x, y, x + width, y + 14, 0xA1000000);
+        context.fill(x, y + 13, x + width, y + 14, 0x884E647A);
+        context.drawCenteredTextWithShadow(client.textRenderer, message, x + (width / 2), y + 3, 0xFFFFFFFF);
     }
 
     private record Prompt(String button, String label) {

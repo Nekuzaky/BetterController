@@ -1,34 +1,91 @@
 package com.bettercontroller.client.chat;
 
-import com.bettercontroller.BetterControllerMod;
 import com.bettercontroller.client.config.ControllerConfig;
+import com.bettercontroller.client.gui.ControllerVirtualKeyboardScreen;
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.Element;
+import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.gui.widget.TextFieldWidget;
 
-import java.io.IOException;
-import java.util.Locale;
-
+/**
+ * Opens BetterController's in-game virtual keyboard for the currently focused text field.
+ */
 public final class VirtualKeyboardLauncher {
-    private long lastLaunchTimestamp;
+    private static final long OPEN_COOLDOWN_MS = 180L;
+    private static final long PENDING_TIMEOUT_MS = 3500L;
 
-    public void tryOpen(ControllerConfig config) {
-        if (config == null || !config.virtualKeyboardEnabled) {
-            return;
+    private long lastLaunchTimestamp;
+    private boolean pendingOpen;
+    private long pendingSince;
+
+    public boolean tryOpen(ControllerConfig config) {
+        if (!isEnabled(config)) {
+            return false;
         }
 
-        String osName = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
-        if (!osName.contains("win")) {
-            return;
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client == null) {
+            return false;
+        }
+        if (client.currentScreen == null || client.currentScreen instanceof ControllerVirtualKeyboardScreen) {
+            return false;
         }
 
         long now = System.currentTimeMillis();
-        if (now - lastLaunchTimestamp < 2000L) {
+        if ((now - lastLaunchTimestamp) < OPEN_COOLDOWN_MS) {
+            return false;
+        }
+
+        Screen screen = client.currentScreen;
+        TextFieldWidget targetField = resolveTargetTextField(screen);
+        if (targetField == null) {
+            return false;
+        }
+
+        lastLaunchTimestamp = now;
+        client.setScreen(new ControllerVirtualKeyboardScreen(screen, targetField));
+        pendingOpen = false;
+        pendingSince = 0L;
+        return true;
+    }
+
+    public void requestOpenOnNextTextScreen(ControllerConfig config) {
+        if (!isEnabled(config)) {
             return;
         }
-        lastLaunchTimestamp = now;
+        pendingOpen = true;
+        pendingSince = System.currentTimeMillis();
+    }
 
-        try {
-            new ProcessBuilder("osk").start();
-        } catch (IOException exception) {
-            BetterControllerMod.LOGGER.warn("Could not launch Windows on-screen keyboard: {}", exception.getMessage());
+    public void processPending(ControllerConfig config) {
+        if (!pendingOpen || !isEnabled(config)) {
+            return;
         }
+        if (tryOpen(config)) {
+            return;
+        }
+        if ((System.currentTimeMillis() - pendingSince) > PENDING_TIMEOUT_MS) {
+            pendingOpen = false;
+            pendingSince = 0L;
+        }
+    }
+
+    private static TextFieldWidget resolveTargetTextField(Screen screen) {
+        if (screen == null) {
+            return null;
+        }
+        if (screen.getFocused() instanceof TextFieldWidget focusedTextField) {
+            return focusedTextField;
+        }
+        for (Element element : screen.children()) {
+            if (element instanceof TextFieldWidget textField) {
+                return textField;
+            }
+        }
+        return null;
+    }
+
+    private static boolean isEnabled(ControllerConfig config) {
+        return config != null && config.virtualKeyboardEnabled;
     }
 }

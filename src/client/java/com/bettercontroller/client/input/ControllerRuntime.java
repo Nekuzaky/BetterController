@@ -3,7 +3,10 @@ package com.bettercontroller.client.input;
 import com.bettercontroller.client.chat.VirtualKeyboardLauncher;
 import com.bettercontroller.client.config.ControllerConfig;
 import com.bettercontroller.client.config.ControllerConfigManager;
+import com.bettercontroller.client.config.ControllerPreset;
+import com.bettercontroller.client.glyph.ControllerGlyphService;
 import com.bettercontroller.client.gui.ControllerGuiNavigationHooks;
+import com.bettercontroller.client.gui.ControllerInventorySelectionState;
 import com.bettercontroller.client.haptics.ControllerHaptics;
 import com.bettercontroller.client.haptics.HapticEvent;
 import com.bettercontroller.client.polling.ControllerPoller;
@@ -24,10 +27,16 @@ public final class ControllerRuntime {
     private final ControllerConfigManager configManager = new ControllerConfigManager();
     private final InputTranslator inputTranslator = new InputTranslator();
     private final MinecraftInputApplier inputApplier = new MinecraftInputApplier();
-    private final ControllerGuiNavigationHooks guiNavigationHooks = new ControllerGuiNavigationHooks(inputTranslator);
+    private final ControllerInventorySelectionState inventorySelectionState = new ControllerInventorySelectionState();
+    private final VirtualKeyboardLauncher virtualKeyboardLauncher = new VirtualKeyboardLauncher();
+    private final ControllerGuiNavigationHooks guiNavigationHooks = new ControllerGuiNavigationHooks(
+        inputTranslator,
+        virtualKeyboardLauncher::tryOpen,
+        inventorySelectionState
+    );
     private final RadialMenuController radialMenuController = new RadialMenuController();
     private final ControllerHaptics controllerHaptics = new ControllerHaptics();
-    private final VirtualKeyboardLauncher virtualKeyboardLauncher = new VirtualKeyboardLauncher();
+    private final ControllerGlyphService glyphService = new ControllerGlyphService();
 
     private ControllerSnapshot latestSnapshot;
     private ControllerConfig latestConfig;
@@ -38,6 +47,11 @@ public final class ControllerRuntime {
     private boolean previousOnGround;
     private long lastBlockBreakHapticMs;
     private long lastRenderLookUpdateMs;
+    private boolean wasControllerConnected;
+    private int previousJoystickId = -1;
+    private ControllerType previousControllerType = ControllerType.NONE;
+    private String runtimeStatusMessage = "";
+    private long runtimeStatusMessageUntilMs;
 
     public ControllerRuntime() {
         this.configManager.load();
@@ -76,25 +90,41 @@ public final class ControllerRuntime {
         return latestConfig != null && latestConfig.hudHintsEnabled;
     }
 
+    public ControllerGlyphService glyphs() {
+        return glyphService;
+    }
+
+    public ControllerInventorySelectionState inventorySelectionState() {
+        return inventorySelectionState;
+    }
+
     public void setHudHintsEnabled(boolean enabled) {
         updateConfig(config -> config.hudHintsEnabled = enabled);
     }
 
-    public void applyUltraFluidPreset() {
-        updateConfig(config -> {
-            config.movementDeadzone = 0.08F;
-            config.lookDeadzone = 0.03F;
-            config.lookSensitivityX = 18.0F;
-            config.lookSensitivityY = 16.5F;
-            config.lookSpeedMultiplier = 2.6F;
-            config.lookResponseCurve = "linear";
-            config.cameraSmoothing = false;
-            config.cameraSmoothingStrength = 0.12F;
-            config.triggerThreshold = 0.30F;
-            config.menuAxisThreshold = 0.30F;
-            config.menuInitialRepeatDelayMs = 100;
-            config.menuRepeatIntervalMs = 38;
-        });
+    public void setDebugOverlayEnabled(boolean enabled) {
+        updateConfig(config -> config.debugOverlayEnabled = enabled);
+    }
+
+    public String runtimeStatusMessage() {
+        if (runtimeStatusMessage.isBlank()) {
+            return "";
+        }
+        if (System.currentTimeMillis() > runtimeStatusMessageUntilMs) {
+            runtimeStatusMessage = "";
+            runtimeStatusMessageUntilMs = 0L;
+            return "";
+        }
+        return runtimeStatusMessage;
+    }
+
+    public void applyPreset(ControllerPreset preset) {
+        ControllerPreset resolvedPreset = preset == null ? ControllerPreset.CONSOLE : preset;
+        updateConfig(resolvedPreset::applyTo);
+    }
+
+    public void resetToDefaults() {
+        latestConfig = configManager.save(ControllerConfig.createDefault());
     }
 
     public void updateConfig(Consumer<ControllerConfig> updater) {
@@ -104,6 +134,15 @@ public final class ControllerRuntime {
         ControllerConfig config = mutableConfig();
         updater.accept(config);
         latestConfig = configManager.save(config);
+    }
+
+    public void previewConfig(Consumer<ControllerConfig> updater) {
+        if (updater == null) {
+            return;
+        }
+        ControllerConfig config = mutableConfig();
+        updater.accept(config);
+        latestConfig = config;
     }
 
     public void tick(MinecraftClient client) {
@@ -118,6 +157,13 @@ public final class ControllerRuntime {
             activeControllerType = ControllerType.NONE;
             activeLayout = null;
             latestFrame = GameplayInputFrame.empty();
+            glyphService.updateControllerType(ControllerType.NONE);
+            if (wasControllerConnected) {
+                pushRuntimeStatus("Controller disconnected. Keyboard/mouse fallback restored.", 3200L);
+            }
+            wasControllerConnected = false;
+            previousJoystickId = -1;
+            previousControllerType = ControllerType.NONE;
             inputApplier.releaseGameplayHolds(client);
             inputTranslator.resetState();
             guiNavigationHooks.reset();
@@ -128,19 +174,39 @@ public final class ControllerRuntime {
         }
 
         activeControllerType = latestSnapshot.controllerType();
+        glyphService.updateControllerType(activeControllerType);
         activeLayout = latestConfig.resolveLayout(activeControllerType);
+        if (!wasControllerConnected || previousJoystickId != latestSnapshot.joystickId()) {
+            pushRuntimeStatus(
+                "Controller connected: " + latestSnapshot.joystickName() + " (" + activeControllerType + ")",
+                3000L
+            );
+        } else if (previousControllerType != activeControllerType) {
+            pushRuntimeStatus(
+                "Controller profile switched to " + activeControllerType + ".",
+                2400L
+            );
+        }
+        wasControllerConnected = true;
+        previousJoystickId = latestSnapshot.joystickId();
+        previousControllerType = activeControllerType;
 
         if (!latestConfig.autoActivateOnController) {
+            latestFrame = GameplayInputFrame.empty();
+            inputApplier.releaseGameplayHolds(client);
+            inputTranslator.resetState();
+            guiNavigationHooks.reset();
             resetRenderLookClock();
             return;
         }
 
-        int radialSelectedSlot = radialMenuController.tick(latestSnapshot, latestConfig, activeLayout, inputTranslator);
+        int radialSelectedSlot = radialMenuController.tick(client, latestSnapshot, latestConfig, activeLayout, inputTranslator);
 
         if (client.currentScreen != null) {
             latestFrame = GameplayInputFrame.empty();
             inputApplier.releaseGameplayHolds(client);
             inputTranslator.resetState();
+            virtualKeyboardLauncher.processPending(latestConfig);
             guiNavigationHooks.onScreenTick(client, latestSnapshot, latestConfig, activeLayout);
             resetRenderLookClock();
             return;
@@ -168,7 +234,7 @@ public final class ControllerRuntime {
         }
 
         if (frame.chatTap()) {
-            virtualKeyboardLauncher.tryOpen(latestConfig);
+            virtualKeyboardLauncher.requestOpenOnNextTextScreen(latestConfig);
         }
 
         inputApplier.applyGameplayFrame(client, frame);
@@ -268,6 +334,14 @@ public final class ControllerRuntime {
             config = ControllerConfig.createDefault();
         }
         return config;
+    }
+
+    private void pushRuntimeStatus(String message, long durationMs) {
+        if (message == null || message.isBlank() || durationMs <= 0L) {
+            return;
+        }
+        runtimeStatusMessage = message;
+        runtimeStatusMessageUntilMs = System.currentTimeMillis() + durationMs;
     }
 
     private static GameplayInputFrame replaceHotbarSelection(GameplayInputFrame frame, int slot) {

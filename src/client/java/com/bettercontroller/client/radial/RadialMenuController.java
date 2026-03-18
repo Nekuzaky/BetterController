@@ -5,12 +5,18 @@ import com.bettercontroller.client.polling.ControllerAxis;
 import com.bettercontroller.client.polling.ControllerSnapshot;
 import com.bettercontroller.client.translation.GameplayAction;
 import com.bettercontroller.client.translation.InputTranslator;
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.item.ItemStack;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public final class RadialMenuController {
     private final RadialMenu radialMenu = new RadialMenu();
     private boolean radialHoldPressed;
 
     public int tick(
+        MinecraftClient client,
         ControllerSnapshot snapshot,
         ControllerConfig config,
         ControllerConfig.ResolvedLayout layout,
@@ -24,7 +30,7 @@ public final class RadialMenuController {
         boolean holdPressed = inputTranslator.isActionPressed(snapshot, config, layout, GameplayAction.RADIAL_MENU);
         if (holdPressed) {
             if (!radialHoldPressed) {
-                radialMenu.open(config.radialMenuSlots);
+                radialMenu.open(config.radialMenuSlots, resolveHotbarLabels(client, config.radialMenuSlots));
             }
             radialHoldPressed = true;
             updateSelection(snapshot, layout);
@@ -93,5 +99,31 @@ public final class RadialMenuController {
 
         float value = snapshot.axis(axis);
         return invert ? -value : value;
+    }
+
+    private static List<String> resolveHotbarLabels(MinecraftClient client, int requestedSlots) {
+        int slotCount = Math.max(4, Math.min(9, requestedSlots));
+        List<String> labels = new ArrayList<>(slotCount);
+
+        for (int i = 0; i < slotCount; i++) {
+            String fallback = "Slot " + (i + 1);
+            if (client == null || client.player == null) {
+                labels.add(fallback);
+                continue;
+            }
+
+            ItemStack stack = client.player.getInventory().getStack(i);
+            if (stack == null || stack.isEmpty()) {
+                labels.add(fallback);
+                continue;
+            }
+
+            String name = stack.getName().getString();
+            if (name.length() > 16) {
+                name = name.substring(0, 15) + ".";
+            }
+            labels.add(name);
+        }
+        return labels;
     }
 }
