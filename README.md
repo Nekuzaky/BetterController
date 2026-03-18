@@ -34,9 +34,25 @@ BetterController is a client-side Fabric mod for premium controller support in M
   - deadzone/sensitivity/trigger sliders
   - look curve + smoothing controls
   - one-click ultra-fluid tuning preset
+- Controller inventory/handled-screen navigation:
+  - directional slot navigation
+  - confirm to pick/place stack
 - Debug overlay (toggle with `F8`).
 - Haptics architecture (`ControllerHaptics`, `HapticEvent`, `HapticProfile`) with graceful no-op fallback on unsupported backends.
 - Chat binding support with optional Windows OSK launch.
+
+## Feature Status (2026-03-14)
+Implemented and usable now:
+- Controller gameplay input (movement, look, actions, hotbar, remapping).
+- Controller GUI navigation for common screens and handled inventories (inventory/chests-style screens).
+- JSON config + auto-reload + per-layout overrides.
+- In-game controller settings screen.
+- Optional HUD hints + debug overlay + radial menu.
+
+Current limitations:
+- Haptics/vibration is currently a graceful no-op in the GLFW backend (architecture is ready, runtime rumble is not active yet).
+- Virtual keyboard launcher currently targets Windows `osk` only and can fail on systems requiring elevation.
+- GUI navigation works, but edge-case polish across every modded/custom screen is still ongoing.
 
 ## Config
 - Runtime config path: `config/bettercontroller.json` (auto-created on first launch)
