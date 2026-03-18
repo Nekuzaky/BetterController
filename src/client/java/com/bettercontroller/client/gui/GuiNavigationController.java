@@ -108,6 +108,9 @@ public final class GuiNavigationController {
 
         if (screenChanged) {
             selectedIndex = findInitialSelectionIndex(screen, focusElements);
+            if (screen instanceof BetterControllerSettingsScreen) {
+                selectedIndex = preferNonSliderSelection(focusElements, selectedIndex);
+            }
         }
         if (selectedIndex < 0 || selectedIndex >= focusElements.size()) {
             selectedIndex = 0;
@@ -432,9 +435,32 @@ public final class GuiNavigationController {
 
         int focusedIndex = findInitialSelectionIndex(screen, focusElements);
         if (focusedIndex >= 0 && focusedIndex < focusElements.size()) {
+            if (screen instanceof BetterControllerSettingsScreen) {
+                return preferNonSliderSelection(focusElements, focusedIndex);
+            }
             return focusedIndex;
         }
+        if (screen instanceof BetterControllerSettingsScreen) {
+            return preferNonSliderSelection(focusElements, 0);
+        }
         return 0;
+    }
+
+    private static int preferNonSliderSelection(List<GuiFocusElement> focusElements, int fallbackIndex) {
+        if (focusElements == null || focusElements.isEmpty()) {
+            return -1;
+        }
+        if (fallbackIndex >= 0
+            && fallbackIndex < focusElements.size()
+            && !(focusElements.get(fallbackIndex).widget() instanceof SliderWidget)) {
+            return fallbackIndex;
+        }
+        for (int i = 0; i < focusElements.size(); i++) {
+            if (!(focusElements.get(i).widget() instanceof SliderWidget)) {
+                return i;
+            }
+        }
+        return Math.max(0, Math.min(fallbackIndex, focusElements.size() - 1));
     }
 
     private static int findDirectionalSlotId(List<Slot> slots, int currentId, int directionX, int directionY) {
