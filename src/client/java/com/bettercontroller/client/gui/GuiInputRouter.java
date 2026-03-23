@@ -1,5 +1,6 @@
 package com.bettercontroller.client.gui;
 
+import com.bettercontroller.BetterControllerMod;
 import com.bettercontroller.client.config.ControllerConfig;
 import com.bettercontroller.client.polling.ControllerAxis;
 import com.bettercontroller.client.polling.ControllerButton;
@@ -15,6 +16,7 @@ public final class GuiInputRouter {
     private final EnumMap<GameplayAction, Long> holdStartMs = new EnumMap<>(GameplayAction.class);
     private final EnumMap<GameplayAction, Long> lastRepeatMs = new EnumMap<>(GameplayAction.class);
     private final EnumMap<GameplayAction, Boolean> axisLatchStates = new EnumMap<>(GameplayAction.class);
+    private String lastDirectionalDebugSignature = "";
 
     public GuiInputFrame route(
         ControllerSnapshot snapshot,
@@ -41,17 +43,30 @@ public final class GuiInputRouter {
         boolean tabNextPressed = actionPressedWithFallback(snapshot, config, layout, translator, GameplayAction.MENU_TAB_NEXT);
         boolean tabPrevPressed = actionPressedWithFallback(snapshot, config, layout, translator, GameplayAction.MENU_TAB_PREV);
 
+        boolean upPulse = pulse(GameplayAction.MENU_UP, upPressed, true, initialDelayMs, repeatIntervalMs);
+        boolean downPulse = pulse(GameplayAction.MENU_DOWN, downPressed, true, initialDelayMs, repeatIntervalMs);
+        boolean leftPulse = pulse(GameplayAction.MENU_LEFT, leftPressed, true, initialDelayMs, repeatIntervalMs);
+        boolean rightPulse = pulse(GameplayAction.MENU_RIGHT, rightPressed, true, initialDelayMs, repeatIntervalMs);
+        boolean confirmPulse = pulse(GameplayAction.MENU_CONFIRM, confirmPressed, allowConfirmRepeat, initialDelayMs, repeatIntervalMs);
+        boolean backPulse = pulse(GameplayAction.MENU_BACK, backPressed, false, initialDelayMs, repeatIntervalMs);
+        boolean pageNextPulse = pulse(GameplayAction.MENU_PAGE_NEXT, pageNextPressed, false, initialDelayMs, repeatIntervalMs);
+        boolean pagePrevPulse = pulse(GameplayAction.MENU_PAGE_PREV, pagePrevPressed, false, initialDelayMs, repeatIntervalMs);
+        boolean tabNextPulse = pulse(GameplayAction.MENU_TAB_NEXT, tabNextPressed, false, initialDelayMs, repeatIntervalMs);
+        boolean tabPrevPulse = pulse(GameplayAction.MENU_TAB_PREV, tabPrevPressed, false, initialDelayMs, repeatIntervalMs);
+
+        logDirectionalDebug(snapshot, config, upPressed, downPressed, leftPressed, rightPressed, upPulse, downPulse, leftPulse, rightPulse);
+
         return new GuiInputFrame(
-            pulse(GameplayAction.MENU_UP, upPressed, true, initialDelayMs, repeatIntervalMs),
-            pulse(GameplayAction.MENU_DOWN, downPressed, true, initialDelayMs, repeatIntervalMs),
-            pulse(GameplayAction.MENU_LEFT, leftPressed, true, initialDelayMs, repeatIntervalMs),
-            pulse(GameplayAction.MENU_RIGHT, rightPressed, true, initialDelayMs, repeatIntervalMs),
-            pulse(GameplayAction.MENU_CONFIRM, confirmPressed, allowConfirmRepeat, initialDelayMs, repeatIntervalMs),
-            pulse(GameplayAction.MENU_BACK, backPressed, false, initialDelayMs, repeatIntervalMs),
-            pulse(GameplayAction.MENU_PAGE_NEXT, pageNextPressed, false, initialDelayMs, repeatIntervalMs),
-            pulse(GameplayAction.MENU_PAGE_PREV, pagePrevPressed, false, initialDelayMs, repeatIntervalMs),
-            pulse(GameplayAction.MENU_TAB_NEXT, tabNextPressed, false, initialDelayMs, repeatIntervalMs),
-            pulse(GameplayAction.MENU_TAB_PREV, tabPrevPressed, false, initialDelayMs, repeatIntervalMs)
+            upPulse,
+            downPulse,
+            leftPulse,
+            rightPulse,
+            confirmPulse,
+            backPulse,
+            pageNextPulse,
+            pagePrevPulse,
+            tabNextPulse,
+            tabPrevPulse
         );
     }
 
@@ -60,6 +75,7 @@ public final class GuiInputRouter {
         holdStartMs.clear();
         lastRepeatMs.clear();
         axisLatchStates.clear();
+        lastDirectionalDebugSignature = "";
     }
 
     private boolean pulse(
@@ -322,6 +338,59 @@ public final class GuiInputRouter {
             return fallback;
         }
         return value;
+    }
+
+    private void logDirectionalDebug(
+        ControllerSnapshot snapshot,
+        ControllerConfig config,
+        boolean upPressed,
+        boolean downPressed,
+        boolean leftPressed,
+        boolean rightPressed,
+        boolean upPulse,
+        boolean downPulse,
+        boolean leftPulse,
+        boolean rightPulse
+    ) {
+        if (snapshot == null || config == null) {
+            return;
+        }
+
+        boolean upLatch = Boolean.TRUE.equals(axisLatchStates.get(GameplayAction.MENU_UP));
+        boolean downLatch = Boolean.TRUE.equals(axisLatchStates.get(GameplayAction.MENU_DOWN));
+        boolean leftLatch = Boolean.TRUE.equals(axisLatchStates.get(GameplayAction.MENU_LEFT));
+        boolean rightLatch = Boolean.TRUE.equals(axisLatchStates.get(GameplayAction.MENU_RIGHT));
+
+        String signature = "raw="
+            + bool(upPressed) + bool(downPressed) + bool(leftPressed) + bool(rightPressed)
+            + " pulse="
+            + bool(upPulse) + bool(downPulse) + bool(leftPulse) + bool(rightPulse)
+            + " latch="
+            + bool(upLatch) + bool(downLatch) + bool(leftLatch) + bool(rightLatch)
+            + " axis=("
+            + fmt(snapshot.axis(ControllerAxis.LEFT_X))
+            + ","
+            + fmt(snapshot.axis(ControllerAxis.LEFT_Y))
+            + ")";
+
+        if (!signature.equals(lastDirectionalDebugSignature) || upPulse || downPulse || leftPulse || rightPulse) {
+            lastDirectionalDebugSignature = signature;
+            BetterControllerMod.LOGGER.info(
+                "[GUI-HOTFIX] router {} thresholds=(press={},release={},legacy={})",
+                signature,
+                fmt(config.menuAxisPressThreshold),
+                fmt(config.menuAxisReleaseThreshold),
+                fmt(config.menuAxisThreshold)
+            );
+        }
+    }
+
+    private static char bool(boolean value) {
+        return value ? '1' : '0';
+    }
+
+    private static String fmt(float value) {
+        return String.format(java.util.Locale.ROOT, "%.2f", value);
     }
 
     private record DirectionalReadState(

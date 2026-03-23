@@ -1,5 +1,6 @@
 package com.bettercontroller.client.gui;
 
+import com.bettercontroller.BetterControllerMod;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.Element;
@@ -13,10 +14,14 @@ import net.minecraft.client.gui.widget.SliderWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.client.input.KeyInput;
 import net.minecraft.client.input.MouseInput;
+import net.minecraft.item.ItemGroup;
+import net.minecraft.item.ItemGroups;
 import net.minecraft.screen.slot.Slot;
 import net.minecraft.screen.slot.SlotActionType;
 import org.lwjgl.glfw.GLFW;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
@@ -25,6 +30,10 @@ public final class GuiNavigationController {
     private static final int SLOT_ROW_TOLERANCE = 10;
     private static final int SLOT_TARGET_ROW_TOLERANCE = 6;
     private static final long CONTROLLER_CURSOR_CAPTURE_TIMEOUT_MS = 2200L;
+    private static Field creativeSelectedTabField;
+    private static Method creativeSetSelectedTabMethod;
+    private static boolean creativeReflectionInitialized;
+    private static boolean creativeReflectionUnavailableLogged;
     private final ControllerInventorySelectionState inventorySelectionState;
     private Screen lastScreen;
     private int selectedIndex = -1;
@@ -33,6 +42,8 @@ public final class GuiNavigationController {
     private boolean controllerCursorCaptured;
     private long lastControllerUiInputMs;
     private NavigationMode navigationMode = NavigationMode.WIDGETS;
+    private NavigationMode lastLoggedNavigationMode;
+    private Element lastFocusedAtTickEnd;
 
     public GuiNavigationController(ControllerInventorySelectionState inventorySelectionState) {
         this.inventorySelectionState = inventorySelectionState == null
@@ -50,11 +61,13 @@ public final class GuiNavigationController {
         }
 
         Screen screen = client.currentScreen;
+        Element focusedAtStart = screen.getFocused();
         boolean screenChanged = screen != lastScreen;
         if (screenChanged) {
             selectedIndex = -1;
             selectedHandledSlotId = -1;
             inventorySelectionState.onScreenChanged(screen);
+            lastFocusedAtTickEnd = null;
         }
         lastScreen = screen;
         if (inputFrame.anyNavigation()) {
@@ -104,26 +117,90 @@ public final class GuiNavigationController {
             releaseControllerCursorCapture(client);
         }
 
+        NavigationDirection directionalInput = resolveDirectionalInput(inputFrame);
+        boolean sliderEditUsed = false;
+        boolean inventoryConsumed = false;
+        boolean listConsumed = false;
+
         switch (navigationMode) {
             case INVENTORY -> {
                 if (handledScreen == null || handledSlots.isEmpty()) {
                     navigationMode = resolveFallbackMode(screen, listWidget, focusElements, hasHandledSlots);
-                    handleWidgetOrListNavigation(screen, listWidget, focusElements, inputFrame, virtualKeyboardRequest);
-                    return;
+                    WidgetNavigationResult fallbackResult = handleWidgetOrListNavigation(
+                        screen,
+                        listWidget,
+                        focusElements,
+                        inputFrame,
+                        virtualKeyboardRequest
+                    );
+                    sliderEditUsed = fallbackResult.sliderEditUsed();
+                    listConsumed = fallbackResult.listConsumed();
+                    // Inventory mode could not run; fallback widget/list path already handled this tick.
+                } else {
+                    boolean captureCursor = (System.currentTimeMillis() - lastControllerUiInputMs) <= CONTROLLER_CURSOR_CAPTURE_TIMEOUT_MS;
+                    inventoryConsumed = handleHandledScreenNavigation(
+                        client,
+                        handledScreen,
+                        handledSlots,
+                        inputFrame,
+                        screenChanged,
+                        captureCursor
+                    );
                 }
-                boolean captureCursor = (System.currentTimeMillis() - lastControllerUiInputMs) <= CONTROLLER_CURSOR_CAPTURE_TIMEOUT_MS;
-                handleHandledScreenNavigation(
-                    client,
-                    handledScreen,
-                    handledSlots,
-                    inputFrame,
-                    screenChanged,
-                    captureCursor
-                );
             }
-            case LIST -> handleListNavigation(screen, listWidget, inputFrame);
+            case LIST -> listConsumed = handleListNavigation(screen, listWidget, inputFrame);
             case TEXT_INPUT -> handleTextInputNavigation(screen, inputFrame, virtualKeyboardRequest);
-            case WIDGETS -> handleWidgetOrListNavigation(screen, listWidget, focusElements, inputFrame, virtualKeyboardRequest);
+            case WIDGETS -> {
+                WidgetNavigationResult widgetResult = handleWidgetOrListNavigation(
+                    screen,
+                    listWidget,
+                    focusElements,
+                    inputFrame,
+                    virtualKeyboardRequest
+                );
+                sliderEditUsed = widgetResult.sliderEditUsed();
+                listConsumed = widgetResult.listConsumed();
+            }
+        }
+
+        Element focusedAtEnd = screen.getFocused();
+        boolean externalFocusChange = !screenChanged
+            && !inputFrame.anyNavigation()
+            && lastFocusedAtTickEnd != null
+            && focusedAtStart != lastFocusedAtTickEnd;
+        lastFocusedAtTickEnd = focusedAtEnd;
+
+        String selectedWidgetClass = "none";
+        int selectedWidgetIndex = -1;
+        if (!focusElements.isEmpty() && selectedIndex >= 0 && selectedIndex < focusElements.size()) {
+            selectedWidgetIndex = selectedIndex;
+            selectedWidgetClass = focusElements.get(selectedIndex).widget().getClass().getSimpleName();
+        }
+
+        boolean shouldLog = inputFrame.anyNavigation()
+            || screenChanged
+            || externalFocusChange
+            || inventoryConsumed
+            || listConsumed
+            || sliderEditUsed
+            || navigationMode != lastLoggedNavigationMode;
+        if (shouldLog) {
+            BetterControllerMod.LOGGER.info(
+                "[GUI-HOTFIX] nav screen={} mode={} dir={} widgetIndex={} widgetClass={} slotId={} sliderEdit={} invConsumed={} listConsumed={} focusStart={} focusEnd={} externalFocusChange={}",
+                screen.getClass().getName(),
+                navigationMode,
+                directionalInput == null ? "none" : directionalInput.name(),
+                selectedWidgetIndex,
+                selectedWidgetClass,
+                selectedHandledSlotId,
+                sliderEditUsed,
+                inventoryConsumed,
+                listConsumed,
+                focusedAtStart == null ? "none" : focusedAtStart.getClass().getSimpleName(),
+                focusedAtEnd == null ? "none" : focusedAtEnd.getClass().getSimpleName(),
+                externalFocusChange
+            );
+            lastLoggedNavigationMode = navigationMode;
         }
     }
 
@@ -135,6 +212,8 @@ public final class GuiNavigationController {
         controllerCursorCaptured = false;
         lastControllerUiInputMs = 0L;
         navigationMode = NavigationMode.WIDGETS;
+        lastLoggedNavigationMode = null;
+        lastFocusedAtTickEnd = null;
         inventorySelectionState.clear();
     }
 
@@ -372,7 +451,7 @@ public final class GuiNavigationController {
         }
     }
 
-    private void handleWidgetOrListNavigation(
+    private WidgetNavigationResult handleWidgetOrListNavigation(
         Screen screen,
         AlwaysSelectedEntryListWidget<?> listWidget,
         List<GuiFocusElement> focusElements,
@@ -380,12 +459,12 @@ public final class GuiNavigationController {
         Consumer<Boolean> virtualKeyboardRequest
     ) {
         if (screen == null || inputFrame == null) {
-            return;
+            return WidgetNavigationResult.NONE;
         }
 
         if (navigationMode == NavigationMode.LIST && listWidget != null) {
-            handleListNavigation(screen, listWidget, inputFrame);
-            return;
+            boolean consumed = handleListNavigation(screen, listWidget, inputFrame);
+            return new WidgetNavigationResult(false, consumed);
         }
 
         if (focusElements == null || focusElements.isEmpty()) {
@@ -404,29 +483,32 @@ public final class GuiNavigationController {
             if (inputFrame.pagePrev()) {
                 pressKey(screen, GLFW.GLFW_KEY_PAGE_UP);
             }
-            return;
+            return WidgetNavigationResult.NONE;
         }
 
         selectedIndex = ensureValidSelection(screen, focusElements, selectedIndex);
         applySelection(screen, focusElements, selectedIndex);
 
         if (screen instanceof BetterControllerSettingsScreen) {
-            selectedIndex = handleLinearSettingsNavigation(
+            LinearSettingsResult settingsResult = handleLinearSettingsNavigation(
                 screen,
                 focusElements,
                 selectedIndex,
                 inputFrame,
                 virtualKeyboardRequest
             );
-            return;
+            selectedIndex = settingsResult.selectedIndex();
+            return new WidgetNavigationResult(settingsResult.sliderEditUsed(), false);
         }
 
         GuiFocusElement selected = focusElements.get(selectedIndex);
         ClickableWidget selectedWidget = selected.widget();
         NavigationDirection direction = resolveDirectionalInput(inputFrame);
+        boolean sliderEditUsed = false;
         if (direction != null) {
             if (selectedWidget instanceof SliderWidget sliderWidget && direction.horizontal()) {
                 pressKey(sliderWidget, direction.x() < 0 ? GLFW.GLFW_KEY_LEFT : GLFW.GLFW_KEY_RIGHT);
+                sliderEditUsed = true;
             } else {
                 selectedIndex = findDirectionalSelection(focusElements, selectedIndex, direction.x(), direction.y());
                 applySelection(screen, focusElements, selectedIndex);
@@ -452,6 +534,7 @@ public final class GuiNavigationController {
         if (inputFrame.tabPrev()) {
             pressKey(screen, GLFW.GLFW_KEY_TAB, GLFW.GLFW_MOD_SHIFT);
         }
+        return new WidgetNavigationResult(sliderEditUsed, false);
     }
 
     private boolean handleHandledScreenNavigation(
@@ -478,6 +561,7 @@ public final class GuiNavigationController {
         inventorySelectionState.setSelectedSlot(handledScreen, selectedSlot);
 
         boolean consumed = false;
+        boolean creativeScreen = handledScreen instanceof CreativeInventoryScreen;
 
         NavigationDirection direction = resolveDirectionalInput(inputFrame);
         if (direction != null) {
@@ -485,6 +569,12 @@ public final class GuiNavigationController {
             if (nextSlotId != selectedHandledSlotId) {
                 selectedHandledSlotId = nextSlotId;
                 consumed = true;
+            } else if (creativeScreen && direction.horizontal()) {
+                int step = direction == NavigationDirection.RIGHT ? 1 : -1;
+                if (cycleCreativeTab((CreativeInventoryScreen) handledScreen, step)) {
+                    selectedHandledSlotId = -1;
+                    consumed = true;
+                }
             }
         }
 
@@ -499,16 +589,36 @@ public final class GuiNavigationController {
             consumed = true;
         }
         if (inputFrame.tabNext()) {
-            consumed = pressKey(handledScreen, GLFW.GLFW_KEY_TAB) || consumed;
+            if (creativeScreen && cycleCreativeTab((CreativeInventoryScreen) handledScreen, 1)) {
+                selectedHandledSlotId = -1;
+                consumed = true;
+            } else {
+                consumed = pressKey(handledScreen, GLFW.GLFW_KEY_TAB) || consumed;
+            }
         }
         if (inputFrame.tabPrev()) {
-            consumed = pressKey(handledScreen, GLFW.GLFW_KEY_TAB, GLFW.GLFW_MOD_SHIFT) || consumed;
+            if (creativeScreen && cycleCreativeTab((CreativeInventoryScreen) handledScreen, -1)) {
+                selectedHandledSlotId = -1;
+                consumed = true;
+            } else {
+                consumed = pressKey(handledScreen, GLFW.GLFW_KEY_TAB, GLFW.GLFW_MOD_SHIFT) || consumed;
+            }
         }
         if (inputFrame.pageNext()) {
-            consumed = pressKey(handledScreen, GLFW.GLFW_KEY_PAGE_DOWN) || consumed;
+            if (creativeScreen && cycleCreativeTab((CreativeInventoryScreen) handledScreen, 1)) {
+                selectedHandledSlotId = -1;
+                consumed = true;
+            } else {
+                consumed = pressKey(handledScreen, GLFW.GLFW_KEY_PAGE_DOWN) || consumed;
+            }
         }
         if (inputFrame.pagePrev()) {
-            consumed = pressKey(handledScreen, GLFW.GLFW_KEY_PAGE_UP) || consumed;
+            if (creativeScreen && cycleCreativeTab((CreativeInventoryScreen) handledScreen, -1)) {
+                selectedHandledSlotId = -1;
+                consumed = true;
+            } else {
+                consumed = pressKey(handledScreen, GLFW.GLFW_KEY_PAGE_UP) || consumed;
+            }
         }
         if (inputFrame.back()) {
             triggerBack(handledScreen);
@@ -569,7 +679,7 @@ public final class GuiNavigationController {
         return used;
     }
 
-    private static int handleLinearSettingsNavigation(
+    private static LinearSettingsResult handleLinearSettingsNavigation(
         Screen screen,
         List<GuiFocusElement> focusElements,
         int selectedIndex,
@@ -577,7 +687,7 @@ public final class GuiNavigationController {
         Consumer<Boolean> virtualKeyboardRequest
     ) {
         if (focusElements.isEmpty()) {
-            return selectedIndex;
+            return new LinearSettingsResult(selectedIndex, false);
         }
 
         if (inputFrame.down()) {
@@ -589,13 +699,16 @@ public final class GuiNavigationController {
         applySelection(screen, focusElements, selectedIndex);
         GuiFocusElement selected = focusElements.get(selectedIndex);
         ClickableWidget widget = selected.widget();
+        boolean sliderEditUsed = false;
 
         if (widget instanceof SliderWidget sliderWidget) {
             if (inputFrame.left()) {
                 pressKey(sliderWidget, GLFW.GLFW_KEY_LEFT);
+                sliderEditUsed = true;
             }
             if (inputFrame.right()) {
                 pressKey(sliderWidget, GLFW.GLFW_KEY_RIGHT);
+                sliderEditUsed = true;
             }
         } else {
             if (inputFrame.confirm()) {
@@ -616,7 +729,7 @@ public final class GuiNavigationController {
         if (inputFrame.back()) {
             triggerBack(screen);
         }
-        return selectedIndex;
+        return new LinearSettingsResult(selectedIndex, sliderEditUsed);
     }
 
     private enum NavigationMode {
@@ -655,6 +768,13 @@ public final class GuiNavigationController {
         boolean vertical() {
             return y != 0;
         }
+    }
+
+    private record WidgetNavigationResult(boolean sliderEditUsed, boolean listConsumed) {
+        private static final WidgetNavigationResult NONE = new WidgetNavigationResult(false, false);
+    }
+
+    private record LinearSettingsResult(int selectedIndex, boolean sliderEditUsed) {
     }
 
     private static List<GuiFocusElement> collectFocusElements(Screen screen) {
@@ -1083,6 +1203,76 @@ public final class GuiNavigationController {
             }
         }
         return slots.get(0);
+    }
+
+    private static boolean cycleCreativeTab(CreativeInventoryScreen screen, int step) {
+        if (screen == null || step == 0) {
+            return false;
+        }
+        if (!initCreativeReflection()) {
+            return false;
+        }
+
+        List<ItemGroup> groups = ItemGroups.getGroupsToDisplay();
+        if (groups == null || groups.isEmpty()) {
+            return false;
+        }
+
+        ItemGroup current = null;
+        try {
+            if (creativeSelectedTabField != null) {
+                current = (ItemGroup) creativeSelectedTabField.get(null);
+            }
+        } catch (ReflectiveOperationException exception) {
+            BetterControllerMod.LOGGER.warn("[GUI-HOTFIX] creative selected tab reflection read failed: {}", exception.getMessage());
+            return false;
+        }
+
+        int currentIndex = groups.indexOf(current);
+        if (currentIndex < 0) {
+            currentIndex = 0;
+        }
+        int nextIndex = Math.floorMod(currentIndex + (step > 0 ? 1 : -1), groups.size());
+        ItemGroup target = groups.get(nextIndex);
+        if (target == null || target == current) {
+            return false;
+        }
+
+        try {
+            creativeSetSelectedTabMethod.invoke(screen, target);
+            BetterControllerMod.LOGGER.info(
+                "[GUI-HOTFIX] creative tab switched step={} from={} to={}",
+                step,
+                current == null ? "none" : current.getDisplayName().getString(),
+                target.getDisplayName().getString()
+            );
+            return true;
+        } catch (ReflectiveOperationException exception) {
+            BetterControllerMod.LOGGER.warn("[GUI-HOTFIX] creative tab reflection invoke failed: {}", exception.getMessage());
+            return false;
+        }
+    }
+
+    private static boolean initCreativeReflection() {
+        if (creativeReflectionInitialized) {
+            return creativeSetSelectedTabMethod != null && creativeSelectedTabField != null;
+        }
+        creativeReflectionInitialized = true;
+        try {
+            creativeSelectedTabField = CreativeInventoryScreen.class.getDeclaredField("selectedTab");
+            creativeSelectedTabField.setAccessible(true);
+            creativeSetSelectedTabMethod = CreativeInventoryScreen.class.getDeclaredMethod("setSelectedTab", ItemGroup.class);
+            creativeSetSelectedTabMethod.setAccessible(true);
+            return true;
+        } catch (ReflectiveOperationException exception) {
+            if (!creativeReflectionUnavailableLogged) {
+                creativeReflectionUnavailableLogged = true;
+                BetterControllerMod.LOGGER.warn("[GUI-HOTFIX] creative tab reflection unavailable: {}", exception.getMessage());
+            }
+            creativeSelectedTabField = null;
+            creativeSetSelectedTabMethod = null;
+            return false;
+        }
     }
 
     private static void clickHandledSlot(MinecraftClient client, HandledScreen<?> screen, Slot slot) {

@@ -14,10 +14,14 @@ import net.minecraft.util.math.Vec2f;
 import net.minecraft.network.packet.c2s.play.UpdateSelectedSlotC2SPacket;
 
 public final class MinecraftInputApplier {
+    private static final long FLIGHT_ASSIST_WINDOW_MS = 280L;
+
     private static boolean warnedMissingBoundKeyAccessor;
     private static boolean warnedMissingMovementVectorAccessor;
     private boolean previousJumpHeld;
-    private boolean pendingFlightAssistTap;
+    private long pendingFlightAssistUntilMs;
+    private int syntheticJumpPulseTicks;
+    private boolean syntheticJumpRisingEdgeTick;
     private boolean previousAttackHeld;
     private boolean previousUseHeld;
 
@@ -26,12 +30,14 @@ public final class MinecraftInputApplier {
             return;
         }
 
-        applyAnalogMovement(client, frame);
+        boolean effectiveJumpHeld = resolveEffectiveJumpHeld(frame.jumpHeld());
+
+        applyAnalogMovement(client, frame, effectiveJumpHeld);
         setHold(client.options.forwardKey, frame.moveForward());
         setHold(client.options.backKey, frame.moveBackward());
         setHold(client.options.leftKey, frame.moveLeft());
         setHold(client.options.rightKey, frame.moveRight());
-        applyJumpKey(client, client.options.jumpKey, frame.jumpHeld());
+        applyJumpKey(client, client.options.jumpKey, effectiveJumpHeld);
         setHold(client.options.sprintKey, frame.sprintHeld());
         setHold(client.options.sneakKey, frame.sneakHeld());
         applyActionKey(client.options.attackKey, frame.attackHeld(), true);
@@ -94,12 +100,28 @@ public final class MinecraftInputApplier {
         setHold(client.options.useKey, false);
         setHold(client.options.playerListKey, false);
         previousJumpHeld = false;
-        pendingFlightAssistTap = false;
+        pendingFlightAssistUntilMs = 0L;
+        syntheticJumpPulseTicks = 0;
+        syntheticJumpRisingEdgeTick = false;
         previousAttackHeld = false;
         previousUseHeld = false;
     }
 
-    private static void applyAnalogMovement(MinecraftClient client, GameplayInputFrame frame) {
+    private boolean resolveEffectiveJumpHeld(boolean rawJumpHeld) {
+        syntheticJumpRisingEdgeTick = false;
+        if (syntheticJumpPulseTicks <= 0) {
+            return rawJumpHeld;
+        }
+        if (syntheticJumpPulseTicks == 2) {
+            syntheticJumpPulseTicks = 1;
+            return false;
+        }
+        syntheticJumpPulseTicks = 0;
+        syntheticJumpRisingEdgeTick = true;
+        return true;
+    }
+
+    private static void applyAnalogMovement(MinecraftClient client, GameplayInputFrame frame, boolean jumpHeld) {
         if (client.player == null || client.player.input == null) {
             return;
         }
@@ -110,7 +132,7 @@ public final class MinecraftInputApplier {
             frame.moveBackward(),
             frame.moveLeft(),
             frame.moveRight(),
-            frame.jumpHeld(),
+            jumpHeld,
             frame.sneakHeld(),
             frame.sprintHeld()
         );
@@ -171,24 +193,65 @@ public final class MinecraftInputApplier {
     }
 
     private void applyJumpKey(MinecraftClient client, KeyBinding keyBinding, boolean held) {
-        if (pendingFlightAssistTap) {
-            tap(keyBinding);
-            pendingFlightAssistTap = false;
-        }
+        maybeApplyPendingFlightAssistTap(client, keyBinding, held);
 
         // Creative flight toggles rely on discrete jump presses; pulse on rising edge,
         // then keep the key held for normal jump/fly-up behavior.
         if (held && !previousJumpHeld) {
             tap(keyBinding);
-            if (shouldQueueFlightAssistTap(client)) {
-                pendingFlightAssistTap = true;
+            if (!syntheticJumpRisingEdgeTick && shouldArmFlightAssist(client)) {
+                pendingFlightAssistUntilMs = System.currentTimeMillis() + FLIGHT_ASSIST_WINDOW_MS;
+                BetterControllerMod.LOGGER.info(
+                    "[FLY-HOTFIX] armed assist flying={} onGround={} held={}",
+                    client.player != null && client.player.getAbilities().flying,
+                    client.player != null && client.player.isOnGround(),
+                    held
+                );
             }
         }
         setHold(keyBinding, held);
         previousJumpHeld = held;
     }
 
-    private static boolean shouldQueueFlightAssistTap(MinecraftClient client) {
+    private void maybeApplyPendingFlightAssistTap(MinecraftClient client, KeyBinding keyBinding, boolean held) {
+        if (pendingFlightAssistUntilMs <= 0L) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        if (now > pendingFlightAssistUntilMs) {
+            pendingFlightAssistUntilMs = 0L;
+            return;
+        }
+        if (!held) {
+            return;
+        }
+        if (shouldFireFlightAssist(client)) {
+            queueSyntheticJumpPulse();
+            pendingFlightAssistUntilMs = 0L;
+            BetterControllerMod.LOGGER.info(
+                "[FLY-HOTFIX] queued synthetic pulse flying={} onGround={} held={}",
+                client.player != null && client.player.getAbilities().flying,
+                client.player != null && client.player.isOnGround(),
+                held
+            );
+        }
+    }
+
+    private void queueSyntheticJumpPulse() {
+        if (syntheticJumpPulseTicks <= 0) {
+            syntheticJumpPulseTicks = 2;
+            BetterControllerMod.LOGGER.info("[FLY-HOTFIX] synthetic pulse stage=release_then_rise");
+        }
+    }
+
+    private static boolean shouldArmFlightAssist(MinecraftClient client) {
+        if (client == null || client.player == null) {
+            return false;
+        }
+        return client.player.getAbilities().allowFlying && !client.player.getAbilities().flying;
+    }
+
+    private static boolean shouldFireFlightAssist(MinecraftClient client) {
         if (client == null || client.player == null) {
             return false;
         }
