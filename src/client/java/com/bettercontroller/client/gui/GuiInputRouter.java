@@ -8,11 +8,13 @@ import com.bettercontroller.client.translation.GameplayAction;
 import com.bettercontroller.client.translation.InputTranslator;
 
 import java.util.EnumMap;
+import java.util.List;
 
 public final class GuiInputRouter {
     private final EnumMap<GameplayAction, Boolean> previousStates = new EnumMap<>(GameplayAction.class);
     private final EnumMap<GameplayAction, Long> holdStartMs = new EnumMap<>(GameplayAction.class);
     private final EnumMap<GameplayAction, Long> lastRepeatMs = new EnumMap<>(GameplayAction.class);
+    private final EnumMap<GameplayAction, Boolean> axisLatchStates = new EnumMap<>(GameplayAction.class);
 
     public GuiInputFrame route(
         ControllerSnapshot snapshot,
@@ -28,10 +30,10 @@ public final class GuiInputRouter {
             repeatIntervalMs = Math.min(repeatIntervalMs, 40L);
         }
 
-        boolean upPressed = actionPressedWithFallback(snapshot, config, layout, translator, GameplayAction.MENU_UP);
-        boolean downPressed = actionPressedWithFallback(snapshot, config, layout, translator, GameplayAction.MENU_DOWN);
-        boolean leftPressed = actionPressedWithFallback(snapshot, config, layout, translator, GameplayAction.MENU_LEFT);
-        boolean rightPressed = actionPressedWithFallback(snapshot, config, layout, translator, GameplayAction.MENU_RIGHT);
+        boolean upPressed = directionalPressedWithHysteresis(snapshot, config, layout, GameplayAction.MENU_UP);
+        boolean downPressed = directionalPressedWithHysteresis(snapshot, config, layout, GameplayAction.MENU_DOWN);
+        boolean leftPressed = directionalPressedWithHysteresis(snapshot, config, layout, GameplayAction.MENU_LEFT);
+        boolean rightPressed = directionalPressedWithHysteresis(snapshot, config, layout, GameplayAction.MENU_RIGHT);
         boolean confirmPressed = actionPressedWithFallback(snapshot, config, layout, translator, GameplayAction.MENU_CONFIRM);
         boolean backPressed = actionPressedWithFallback(snapshot, config, layout, translator, GameplayAction.MENU_BACK);
         boolean pageNextPressed = actionPressedWithFallback(snapshot, config, layout, translator, GameplayAction.MENU_PAGE_NEXT);
@@ -57,6 +59,7 @@ public final class GuiInputRouter {
         previousStates.clear();
         holdStartMs.clear();
         lastRepeatMs.clear();
+        axisLatchStates.clear();
     }
 
     private boolean pulse(
@@ -104,6 +107,162 @@ public final class GuiInputRouter {
             return fallback;
         }
         return value;
+    }
+
+    private boolean directionalPressedWithHysteresis(
+        ControllerSnapshot snapshot,
+        ControllerConfig config,
+        ControllerConfig.ResolvedLayout layout,
+        GameplayAction action
+    ) {
+        if (action == null) {
+            return false;
+        }
+        if (snapshot == null || config == null || layout == null) {
+            axisLatchStates.put(action, false);
+            return false;
+        }
+
+        float pressThreshold = clampFloat(
+            config.menuAxisPressThreshold,
+            0.2F,
+            0.95F,
+            clampFloat(config.menuAxisThreshold, 0.2F, 0.95F, 0.40F)
+        );
+        float releaseThreshold = clampFloat(config.menuAxisReleaseThreshold, 0.05F, 0.90F, 0.20F);
+        if (releaseThreshold >= pressThreshold) {
+            releaseThreshold = Math.max(0.05F, pressThreshold - 0.10F);
+        }
+
+        DirectionalReadState readState = readDirectionalBindings(snapshot, layout.actionBindings(action.configKey()));
+        if (!readState.hasRecognizedBinding()) {
+            readState = fallbackDirectionalReadState(snapshot, action);
+        }
+
+        boolean latchedAxisPressed = updateAxisLatch(action, readState.axisMagnitude(), readState.hasAxis(), pressThreshold, releaseThreshold);
+        return readState.digitalPressed() || latchedAxisPressed;
+    }
+
+    private boolean updateAxisLatch(
+        GameplayAction action,
+        float axisMagnitude,
+        boolean hasAxis,
+        float pressThreshold,
+        float releaseThreshold
+    ) {
+        if (action == null) {
+            return false;
+        }
+        if (!hasAxis) {
+            axisLatchStates.put(action, false);
+            return false;
+        }
+
+        boolean latched = Boolean.TRUE.equals(axisLatchStates.get(action));
+        if (latched) {
+            if (axisMagnitude <= releaseThreshold) {
+                axisLatchStates.put(action, false);
+                return false;
+            }
+            return true;
+        }
+
+        if (axisMagnitude >= pressThreshold) {
+            axisLatchStates.put(action, true);
+            return true;
+        }
+
+        axisLatchStates.put(action, false);
+        return false;
+    }
+
+    private static DirectionalReadState readDirectionalBindings(
+        ControllerSnapshot snapshot,
+        List<String> bindings
+    ) {
+        if (snapshot == null || bindings == null || bindings.isEmpty()) {
+            return DirectionalReadState.empty();
+        }
+
+        boolean digitalPressed = false;
+        boolean hasAxis = false;
+        boolean hasRecognizedBinding = false;
+        float axisMagnitude = 0.0F;
+
+        for (String binding : bindings) {
+            if (binding == null || binding.isBlank()) {
+                continue;
+            }
+
+            boolean invertAxis = binding.startsWith("-");
+            String normalized = invertAxis ? binding.substring(1) : binding;
+
+            ControllerButton button = ControllerButton.fromTokenOrNull(normalized);
+            if (button != null) {
+                hasRecognizedBinding = true;
+                if (snapshot.isPressed(button)) {
+                    digitalPressed = true;
+                }
+                continue;
+            }
+
+            ControllerAxis axis = ControllerAxis.fromTokenOrNull(normalized);
+            if (axis == null) {
+                continue;
+            }
+            hasRecognizedBinding = true;
+            hasAxis = true;
+
+            float value = snapshot.axis(axis);
+            if (invertAxis) {
+                value = -value;
+            }
+            if (axis.isTrigger()) {
+                value = normalizeTrigger(value);
+            }
+            axisMagnitude = Math.max(axisMagnitude, Math.max(0.0F, value));
+        }
+
+        return new DirectionalReadState(digitalPressed, hasAxis, hasRecognizedBinding, axisMagnitude);
+    }
+
+    private static DirectionalReadState fallbackDirectionalReadState(
+        ControllerSnapshot snapshot,
+        GameplayAction action
+    ) {
+        if (snapshot == null || action == null) {
+            return DirectionalReadState.empty();
+        }
+
+        float leftX = snapshot.axis(ControllerAxis.LEFT_X);
+        float leftY = snapshot.axis(ControllerAxis.LEFT_Y);
+        return switch (action) {
+            case MENU_UP -> new DirectionalReadState(
+                snapshot.isPressed(ControllerButton.DPAD_UP),
+                true,
+                true,
+                Math.max(0.0F, -leftY)
+            );
+            case MENU_DOWN -> new DirectionalReadState(
+                snapshot.isPressed(ControllerButton.DPAD_DOWN),
+                true,
+                true,
+                Math.max(0.0F, leftY)
+            );
+            case MENU_LEFT -> new DirectionalReadState(
+                snapshot.isPressed(ControllerButton.DPAD_LEFT),
+                true,
+                true,
+                Math.max(0.0F, -leftX)
+            );
+            case MENU_RIGHT -> new DirectionalReadState(
+                snapshot.isPressed(ControllerButton.DPAD_RIGHT),
+                true,
+                true,
+                Math.max(0.0F, leftX)
+            );
+            default -> DirectionalReadState.empty();
+        };
     }
 
     private static boolean actionPressedWithFallback(
@@ -163,5 +322,16 @@ public final class GuiInputRouter {
             return fallback;
         }
         return value;
+    }
+
+    private record DirectionalReadState(
+        boolean digitalPressed,
+        boolean hasAxis,
+        boolean hasRecognizedBinding,
+        float axisMagnitude
+    ) {
+        private static DirectionalReadState empty() {
+            return new DirectionalReadState(false, false, false, 0.0F);
+        }
     }
 }

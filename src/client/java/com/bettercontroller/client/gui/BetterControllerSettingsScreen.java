@@ -688,7 +688,9 @@ public final class BetterControllerSettingsScreen extends Screen {
         lookSpeedMultiplier = config.lookSpeedMultiplier;
         invertLookY = config.invertLookY;
         triggerThreshold = config.triggerThreshold;
-        menuAxisThreshold = config.menuAxisThreshold;
+        menuAxisThreshold = config.menuAxisPressThreshold > 0.0F
+            ? config.menuAxisPressThreshold
+            : config.menuAxisThreshold;
         cameraSmoothing = config.cameraSmoothing;
         cameraSmoothingStrength = config.cameraSmoothingStrength;
         lookResponseCurve = config.lookResponseCurve == null || config.lookResponseCurve.isBlank()
@@ -827,6 +829,10 @@ public final class BetterControllerSettingsScreen extends Screen {
         config.invertLookY = invertLookY;
         config.triggerThreshold = triggerThreshold;
         config.menuAxisThreshold = menuAxisThreshold;
+        config.menuAxisPressThreshold = menuAxisThreshold;
+        if (config.menuAxisReleaseThreshold >= config.menuAxisPressThreshold) {
+            config.menuAxisReleaseThreshold = Math.max(0.05F, config.menuAxisPressThreshold - 0.10F);
+        }
         config.cameraSmoothing = cameraSmoothing;
         config.cameraSmoothingStrength = cameraSmoothingStrength;
         config.lookResponseCurve = lookResponseCurve;

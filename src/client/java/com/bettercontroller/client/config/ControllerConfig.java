@@ -11,7 +11,7 @@ import java.util.Locale;
 import java.util.Map;
 
 public final class ControllerConfig {
-    public int schemaVersion = 7;
+    public int schemaVersion = 8;
     public boolean autoActivateOnController = true;
     public boolean autoSwitchLayoutByControllerType = true;
     public String activeLayout = "xbox";
@@ -30,6 +30,8 @@ public final class ControllerConfig {
     public float cameraSmoothingStrength = 0.35F;
     public float triggerThreshold = 0.45F;
     public float menuAxisThreshold = 0.35F;
+    public float menuAxisPressThreshold = 0.40F;
+    public float menuAxisReleaseThreshold = 0.20F;
     public int menuInitialRepeatDelayMs = 140;
     public int menuRepeatIntervalMs = 55;
 
@@ -88,6 +90,17 @@ public final class ControllerConfig {
         }
         if (menuAxisThreshold <= 0.0F) {
             menuAxisThreshold = fallback.menuAxisThreshold;
+        }
+        if (menuAxisPressThreshold <= 0.0F) {
+            menuAxisPressThreshold = menuAxisThreshold > 0.0F
+                ? menuAxisThreshold
+                : fallback.menuAxisPressThreshold;
+        }
+        if (menuAxisReleaseThreshold <= 0.0F) {
+            menuAxisReleaseThreshold = fallback.menuAxisReleaseThreshold;
+        }
+        if (menuAxisReleaseThreshold >= menuAxisPressThreshold) {
+            menuAxisReleaseThreshold = Math.max(0.05F, menuAxisPressThreshold - 0.10F);
         }
         if (menuInitialRepeatDelayMs <= 0) {
             menuInitialRepeatDelayMs = fallback.menuInitialRepeatDelayMs;

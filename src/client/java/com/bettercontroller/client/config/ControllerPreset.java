@@ -44,6 +44,8 @@ public enum ControllerPreset {
                 config.cameraSmoothingStrength = 0.25F;
                 config.triggerThreshold = 0.45F;
                 config.menuAxisThreshold = 0.35F;
+                config.menuAxisPressThreshold = 0.40F;
+                config.menuAxisReleaseThreshold = 0.20F;
                 config.menuInitialRepeatDelayMs = 140;
                 config.menuRepeatIntervalMs = 55;
             }
@@ -60,6 +62,8 @@ public enum ControllerPreset {
                 config.cameraSmoothingStrength = 0.38F;
                 config.triggerThreshold = 0.35F;
                 config.menuAxisThreshold = 0.30F;
+                config.menuAxisPressThreshold = 0.34F;
+                config.menuAxisReleaseThreshold = 0.18F;
                 config.menuInitialRepeatDelayMs = 110;
                 config.menuRepeatIntervalMs = 42;
             }
@@ -76,6 +80,8 @@ public enum ControllerPreset {
                 config.cameraSmoothingStrength = 0.18F;
                 config.triggerThreshold = 0.38F;
                 config.menuAxisThreshold = 0.33F;
+                config.menuAxisPressThreshold = 0.36F;
+                config.menuAxisReleaseThreshold = 0.18F;
                 config.menuInitialRepeatDelayMs = 120;
                 config.menuRepeatIntervalMs = 48;
             }

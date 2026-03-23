@@ -32,6 +32,7 @@ public final class GuiNavigationController {
     private boolean preferListFocus;
     private boolean controllerCursorCaptured;
     private long lastControllerUiInputMs;
+    private NavigationMode navigationMode = NavigationMode.WIDGETS;
 
     public GuiNavigationController(ControllerInventorySelectionState inventorySelectionState) {
         this.inventorySelectionState = inventorySelectionState == null
@@ -61,6 +62,22 @@ public final class GuiNavigationController {
         }
 
         AlwaysSelectedEntryListWidget<?> listWidget = findListWidget(screen);
+        List<GuiFocusElement> focusElements = collectFocusElements(screen);
+        if (screenChanged && !focusElements.isEmpty()) {
+            selectedIndex = findInitialSelectionIndex(screen, focusElements);
+            if (screen instanceof BetterControllerSettingsScreen) {
+                selectedIndex = preferNonSliderSelection(focusElements, selectedIndex);
+            }
+        }
+        selectedIndex = ensureValidSelection(screen, focusElements, selectedIndex);
+
+        HandledScreen<?> handledScreen = screen instanceof HandledScreen<?> candidate ? candidate : null;
+        List<Slot> handledSlots = handledScreen == null ? List.of() : collectNavigableSlots(handledScreen);
+        boolean hasHandledSlots = !handledSlots.isEmpty();
+        if (hasHandledSlots) {
+            initializeHandledSlotSelection(client, handledSlots, screenChanged);
+        }
+
         if (screenChanged) {
             preferListFocus = listWidget != null;
         } else if (listWidget == null) {
@@ -73,36 +90,305 @@ public final class GuiNavigationController {
             preferListFocus = true;
         }
 
+        navigationMode = resolveNavigationMode(
+            screen,
+            listWidget,
+            focusElements,
+            handledScreen,
+            handledSlots,
+            inputFrame,
+            screenChanged
+        );
+
+        if (navigationMode != NavigationMode.INVENTORY) {
+            releaseControllerCursorCapture(client);
+        }
+
+        switch (navigationMode) {
+            case INVENTORY -> {
+                if (handledScreen == null || handledSlots.isEmpty()) {
+                    navigationMode = resolveFallbackMode(screen, listWidget, focusElements, hasHandledSlots);
+                    handleWidgetOrListNavigation(screen, listWidget, focusElements, inputFrame, virtualKeyboardRequest);
+                    return;
+                }
+                boolean captureCursor = (System.currentTimeMillis() - lastControllerUiInputMs) <= CONTROLLER_CURSOR_CAPTURE_TIMEOUT_MS;
+                handleHandledScreenNavigation(
+                    client,
+                    handledScreen,
+                    handledSlots,
+                    inputFrame,
+                    screenChanged,
+                    captureCursor
+                );
+            }
+            case LIST -> handleListNavigation(screen, listWidget, inputFrame);
+            case TEXT_INPUT -> handleTextInputNavigation(screen, inputFrame, virtualKeyboardRequest);
+            case WIDGETS -> handleWidgetOrListNavigation(screen, listWidget, focusElements, inputFrame, virtualKeyboardRequest);
+        }
+    }
+
+    public void reset() {
+        lastScreen = null;
+        selectedIndex = -1;
+        selectedHandledSlotId = -1;
+        preferListFocus = false;
+        controllerCursorCaptured = false;
+        lastControllerUiInputMs = 0L;
+        navigationMode = NavigationMode.WIDGETS;
+        inventorySelectionState.clear();
+    }
+
+    private NavigationMode resolveNavigationMode(
+        Screen screen,
+        AlwaysSelectedEntryListWidget<?> listWidget,
+        List<GuiFocusElement> focusElements,
+        HandledScreen<?> handledScreen,
+        List<Slot> handledSlots,
+        GuiInputFrame inputFrame,
+        boolean screenChanged
+    ) {
+        boolean hasHandledSlots = handledScreen != null && handledSlots != null && !handledSlots.isEmpty();
+        boolean hasFocusableWidgets = focusElements != null && !focusElements.isEmpty();
+        NavigationDirection direction = resolveDirectionalInput(inputFrame);
+
+        if (screenChanged) {
+            navigationMode = resolveInitialMode(screen, listWidget, hasFocusableWidgets, hasHandledSlots);
+        }
+
         boolean focusedTextInput = screen.getFocused() instanceof TextFieldWidget;
-        if (focusedTextInput
-            && screen instanceof HandledScreen<?>
-            && (inputFrame.up() || inputFrame.down() || inputFrame.left() || inputFrame.right())) {
-            // Let D-pad/stick immediately reclaim inventory navigation on handled screens
-            // (notably Creative inventory search field focus).
+        if (focusedTextInput && hasHandledSlots && direction != null) {
+            // Keep the existing handled-screen behavior: directional input can reclaim slot navigation
+            // from focused text fields such as Creative search.
             screen.setFocused(null);
             focusedTextInput = false;
-        }
-        if (screen instanceof HandledScreen<?> handledScreen && !focusedTextInput) {
-            boolean captureCursor = (System.currentTimeMillis() - lastControllerUiInputMs) <= CONTROLLER_CURSOR_CAPTURE_TIMEOUT_MS;
-            boolean handledInventoryNavigation = handleHandledScreenNavigation(
-                client,
-                handledScreen,
-                inputFrame,
-                screenChanged,
-                captureCursor
-            );
-            if (handledInventoryNavigation) {
-                if (inputFrame.back()) {
-                    triggerBack(screen);
-                }
-                return;
+            if (navigationMode == NavigationMode.TEXT_INPUT) {
+                navigationMode = NavigationMode.INVENTORY;
             }
         }
-        releaseControllerCursorCapture(client);
+        if (focusedTextInput) {
+            return NavigationMode.TEXT_INPUT;
+        }
 
-        boolean listNavigationActive = handleListNavigation(screen, listWidget, inputFrame, preferListFocus);
-        List<GuiFocusElement> focusElements = collectFocusElements(screen);
-        if (focusElements.isEmpty()) {
+        if (!hasHandledSlots && navigationMode == NavigationMode.INVENTORY) {
+            navigationMode = resolveFallbackMode(screen, listWidget, focusElements, false);
+        }
+        if (listWidget == null && navigationMode == NavigationMode.LIST) {
+            navigationMode = resolveFallbackMode(screen, null, focusElements, hasHandledSlots);
+        }
+
+        if (screen.getFocused() == listWidget && listWidget != null) {
+            navigationMode = NavigationMode.LIST;
+        } else if (screen.getFocused() instanceof ClickableWidget && hasFocusableWidgets) {
+            navigationMode = NavigationMode.WIDGETS;
+        }
+
+        if (navigationMode == NavigationMode.INVENTORY) {
+            if (!hasHandledSlots) {
+                return resolveFallbackMode(screen, listWidget, focusElements, false);
+            }
+            if ((inputFrame.tabNext() || inputFrame.tabPrev()) && (hasFocusableWidgets || listWidget != null)) {
+                return resolveFallbackMode(screen, listWidget, focusElements, true);
+            }
+            if (direction != null
+                && !canMoveInventorySelection(handledSlots, direction)
+                && (hasFocusableWidgets || listWidget != null)) {
+                return resolveFallbackMode(screen, listWidget, focusElements, true);
+            }
+            return NavigationMode.INVENTORY;
+        }
+
+        if (navigationMode == NavigationMode.LIST && listWidget != null) {
+            if (!preferListFocus && direction != null && direction.horizontal()) {
+                if (hasHandledSlots) {
+                    return NavigationMode.INVENTORY;
+                }
+                return hasFocusableWidgets ? NavigationMode.WIDGETS : NavigationMode.LIST;
+            }
+            return NavigationMode.LIST;
+        }
+
+        if (hasFocusableWidgets) {
+            if (hasHandledSlots
+                && navigationMode == NavigationMode.WIDGETS
+                && direction != null
+                && !canMoveWidgetSelection(screen, focusElements, direction)) {
+                return NavigationMode.INVENTORY;
+            }
+            return NavigationMode.WIDGETS;
+        }
+
+        if (listWidget != null && preferListFocus) {
+            return NavigationMode.LIST;
+        }
+        if (hasHandledSlots) {
+            return NavigationMode.INVENTORY;
+        }
+        return NavigationMode.WIDGETS;
+    }
+
+    private static NavigationMode resolveInitialMode(
+        Screen screen,
+        AlwaysSelectedEntryListWidget<?> listWidget,
+        boolean hasFocusableWidgets,
+        boolean hasHandledSlots
+    ) {
+        if (screen != null && screen.getFocused() instanceof TextFieldWidget) {
+            return NavigationMode.TEXT_INPUT;
+        }
+        if (screen != null && listWidget != null && screen.getFocused() == listWidget) {
+            return NavigationMode.LIST;
+        }
+        if (hasHandledSlots) {
+            return NavigationMode.INVENTORY;
+        }
+        if (hasFocusableWidgets) {
+            return NavigationMode.WIDGETS;
+        }
+        if (listWidget != null) {
+            return NavigationMode.LIST;
+        }
+        return NavigationMode.WIDGETS;
+    }
+
+    private NavigationMode resolveFallbackMode(
+        Screen screen,
+        AlwaysSelectedEntryListWidget<?> listWidget,
+        List<GuiFocusElement> focusElements,
+        boolean hasHandledSlots
+    ) {
+        if (screen != null && screen.getFocused() instanceof TextFieldWidget) {
+            return NavigationMode.TEXT_INPUT;
+        }
+        if (listWidget != null && (preferListFocus || screen.getFocused() == listWidget)) {
+            return NavigationMode.LIST;
+        }
+        if (focusElements != null && !focusElements.isEmpty()) {
+            return NavigationMode.WIDGETS;
+        }
+        return hasHandledSlots ? NavigationMode.INVENTORY : NavigationMode.WIDGETS;
+    }
+
+    private boolean canMoveInventorySelection(List<Slot> slots, NavigationDirection direction) {
+        if (slots == null || slots.isEmpty() || direction == null) {
+            return false;
+        }
+        Slot current = findSlotById(slots, selectedHandledSlotId);
+        if (current == null) {
+            return true;
+        }
+        int nextSlotId = findDirectionalSlotId(slots, current.id, direction.x(), direction.y());
+        return nextSlotId != current.id;
+    }
+
+    private boolean canMoveWidgetSelection(
+        Screen screen,
+        List<GuiFocusElement> focusElements,
+        NavigationDirection direction
+    ) {
+        if (direction == null || focusElements == null || focusElements.isEmpty()) {
+            return false;
+        }
+
+        if (selectedIndex < 0 || selectedIndex >= focusElements.size()) {
+            return false;
+        }
+
+        if (screen instanceof BetterControllerSettingsScreen) {
+            if (direction.vertical()) {
+                return focusElements.size() > 1;
+            }
+            ClickableWidget selectedWidget = focusElements.get(selectedIndex).widget();
+            return selectedWidget instanceof SliderWidget;
+        }
+
+        ClickableWidget selectedWidget = focusElements.get(selectedIndex).widget();
+        if (selectedWidget instanceof SliderWidget && direction.horizontal()) {
+            return true;
+        }
+        int nextIndex = findDirectionalSelection(focusElements, selectedIndex, direction.x(), direction.y());
+        return nextIndex != selectedIndex;
+    }
+
+    private static NavigationDirection resolveDirectionalInput(GuiInputFrame inputFrame) {
+        if (inputFrame == null) {
+            return null;
+        }
+        if (inputFrame.up()) {
+            return NavigationDirection.UP;
+        }
+        if (inputFrame.down()) {
+            return NavigationDirection.DOWN;
+        }
+        if (inputFrame.left()) {
+            return NavigationDirection.LEFT;
+        }
+        if (inputFrame.right()) {
+            return NavigationDirection.RIGHT;
+        }
+        return null;
+    }
+
+    private void initializeHandledSlotSelection(MinecraftClient client, List<Slot> slots, boolean screenChanged) {
+        if (slots == null || slots.isEmpty()) {
+            return;
+        }
+        if (screenChanged || findSlotById(slots, selectedHandledSlotId) == null) {
+            Slot initial = resolveInitialSlot(client, slots);
+            if (initial != null) {
+                selectedHandledSlotId = initial.id;
+            }
+        }
+        if (findSlotById(slots, selectedHandledSlotId) == null) {
+            selectedHandledSlotId = slots.get(0).id;
+        }
+    }
+
+    private void handleTextInputNavigation(
+        Screen screen,
+        GuiInputFrame inputFrame,
+        Consumer<Boolean> virtualKeyboardRequest
+    ) {
+        if (screen == null || inputFrame == null) {
+            return;
+        }
+
+        if (inputFrame.confirm() && screen.getFocused() instanceof TextFieldWidget textFieldWidget) {
+            triggerConfirm(GuiFocusElement.fromWidget(textFieldWidget), virtualKeyboardRequest);
+        }
+        if (inputFrame.back()) {
+            triggerBack(screen);
+        }
+        if (inputFrame.tabNext()) {
+            pressKey(screen, GLFW.GLFW_KEY_TAB);
+        }
+        if (inputFrame.tabPrev()) {
+            pressKey(screen, GLFW.GLFW_KEY_TAB, GLFW.GLFW_MOD_SHIFT);
+        }
+        if (inputFrame.pageNext()) {
+            pressKey(screen, GLFW.GLFW_KEY_PAGE_DOWN);
+        }
+        if (inputFrame.pagePrev()) {
+            pressKey(screen, GLFW.GLFW_KEY_PAGE_UP);
+        }
+    }
+
+    private void handleWidgetOrListNavigation(
+        Screen screen,
+        AlwaysSelectedEntryListWidget<?> listWidget,
+        List<GuiFocusElement> focusElements,
+        GuiInputFrame inputFrame,
+        Consumer<Boolean> virtualKeyboardRequest
+    ) {
+        if (screen == null || inputFrame == null) {
+            return;
+        }
+
+        if (navigationMode == NavigationMode.LIST && listWidget != null) {
+            handleListNavigation(screen, listWidget, inputFrame);
+            return;
+        }
+
+        if (focusElements == null || focusElements.isEmpty()) {
             if (inputFrame.back()) {
                 triggerBack(screen);
             }
@@ -112,18 +398,15 @@ public final class GuiNavigationController {
             if (inputFrame.tabPrev()) {
                 pressKey(screen, GLFW.GLFW_KEY_TAB, GLFW.GLFW_MOD_SHIFT);
             }
+            if (inputFrame.pageNext()) {
+                pressKey(screen, GLFW.GLFW_KEY_PAGE_DOWN);
+            }
+            if (inputFrame.pagePrev()) {
+                pressKey(screen, GLFW.GLFW_KEY_PAGE_UP);
+            }
             return;
         }
 
-        if (screenChanged) {
-            selectedIndex = findInitialSelectionIndex(screen, focusElements);
-            if (screen instanceof BetterControllerSettingsScreen) {
-                selectedIndex = preferNonSliderSelection(focusElements, selectedIndex);
-            }
-        }
-        if (selectedIndex < 0 || selectedIndex >= focusElements.size()) {
-            selectedIndex = 0;
-        }
         selectedIndex = ensureValidSelection(screen, focusElements, selectedIndex);
         applySelection(screen, focusElements, selectedIndex);
 
@@ -138,27 +421,21 @@ public final class GuiNavigationController {
             return;
         }
 
-        if (listNavigationActive) {
-            if (inputFrame.back()) {
-                triggerBack(screen);
+        GuiFocusElement selected = focusElements.get(selectedIndex);
+        ClickableWidget selectedWidget = selected.widget();
+        NavigationDirection direction = resolveDirectionalInput(inputFrame);
+        if (direction != null) {
+            if (selectedWidget instanceof SliderWidget sliderWidget && direction.horizontal()) {
+                pressKey(sliderWidget, direction.x() < 0 ? GLFW.GLFW_KEY_LEFT : GLFW.GLFW_KEY_RIGHT);
+            } else {
+                selectedIndex = findDirectionalSelection(focusElements, selectedIndex, direction.x(), direction.y());
+                applySelection(screen, focusElements, selectedIndex);
+                selected = focusElements.get(selectedIndex);
             }
-            return;
         }
-
-        if (inputFrame.up()) {
-            selectedIndex = findDirectionalSelection(focusElements, selectedIndex, 0, -1);
-        } else if (inputFrame.down()) {
-            selectedIndex = findDirectionalSelection(focusElements, selectedIndex, 0, 1);
-        } else if (inputFrame.left()) {
-            selectedIndex = findDirectionalSelection(focusElements, selectedIndex, -1, 0);
-        } else if (inputFrame.right()) {
-            selectedIndex = findDirectionalSelection(focusElements, selectedIndex, 1, 0);
-        }
-
-        applySelection(screen, focusElements, selectedIndex);
 
         if (inputFrame.confirm()) {
-            triggerConfirm(focusElements.get(selectedIndex), virtualKeyboardRequest);
+            triggerConfirm(selected, virtualKeyboardRequest);
         }
         if (inputFrame.back()) {
             triggerBack(screen);
@@ -175,52 +452,23 @@ public final class GuiNavigationController {
         if (inputFrame.tabPrev()) {
             pressKey(screen, GLFW.GLFW_KEY_TAB, GLFW.GLFW_MOD_SHIFT);
         }
-
-        if (focusElements.get(selectedIndex).widget() instanceof SliderWidget sliderWidget) {
-            if (inputFrame.left()) {
-                pressKey(sliderWidget, GLFW.GLFW_KEY_LEFT);
-            }
-            if (inputFrame.right()) {
-                pressKey(sliderWidget, GLFW.GLFW_KEY_RIGHT);
-            }
-        }
-    }
-
-    public void reset() {
-        lastScreen = null;
-        selectedIndex = -1;
-        selectedHandledSlotId = -1;
-        preferListFocus = false;
-        controllerCursorCaptured = false;
-        lastControllerUiInputMs = 0L;
-        inventorySelectionState.clear();
     }
 
     private boolean handleHandledScreenNavigation(
         MinecraftClient client,
         HandledScreen<?> handledScreen,
+        List<Slot> slots,
         GuiInputFrame inputFrame,
         boolean screenChanged,
         boolean captureCursor
     ) {
-        boolean hasInventoryNavigationInput = inputFrame.up()
-            || inputFrame.down()
-            || inputFrame.left()
-            || inputFrame.right()
-            || inputFrame.confirm();
-
-        List<Slot> slots = collectNavigableSlots(handledScreen);
         if (slots.isEmpty()) {
             releaseControllerCursorCapture(client);
             return false;
         }
 
         updateControllerCursorCapture(client, captureCursor, inputFrame.anyNavigation());
-
-        if (screenChanged || findSlotById(slots, selectedHandledSlotId) == null) {
-            Slot initial = resolveInitialSlot(client, slots);
-            selectedHandledSlotId = initial.id;
-        }
+        initializeHandledSlotSelection(client, slots, screenChanged);
 
         Slot selectedSlot = findSlotById(slots, selectedHandledSlotId);
         if (selectedSlot == null) {
@@ -229,20 +477,15 @@ public final class GuiNavigationController {
         }
         inventorySelectionState.setSelectedSlot(handledScreen, selectedSlot);
 
-        if (!hasInventoryNavigationInput) {
-            // Keep controller selection authoritative every tick on handled screens,
-            // otherwise vanilla mouse hover can steal focus after a pickup/place action.
-            return true;
-        }
+        boolean consumed = false;
 
-        if (inputFrame.up()) {
-            selectedHandledSlotId = findDirectionalSlotId(slots, selectedHandledSlotId, 0, -1);
-        } else if (inputFrame.down()) {
-            selectedHandledSlotId = findDirectionalSlotId(slots, selectedHandledSlotId, 0, 1);
-        } else if (inputFrame.left()) {
-            selectedHandledSlotId = findDirectionalSlotId(slots, selectedHandledSlotId, -1, 0);
-        } else if (inputFrame.right()) {
-            selectedHandledSlotId = findDirectionalSlotId(slots, selectedHandledSlotId, 1, 0);
+        NavigationDirection direction = resolveDirectionalInput(inputFrame);
+        if (direction != null) {
+            int nextSlotId = findDirectionalSlotId(slots, selectedHandledSlotId, direction.x(), direction.y());
+            if (nextSlotId != selectedHandledSlotId) {
+                selectedHandledSlotId = nextSlotId;
+                consumed = true;
+            }
         }
 
         selectedSlot = findSlotById(slots, selectedHandledSlotId);
@@ -253,40 +496,33 @@ public final class GuiNavigationController {
         inventorySelectionState.setSelectedSlot(handledScreen, selectedSlot);
         if (inputFrame.confirm()) {
             clickHandledSlot(client, handledScreen, selectedSlot);
+            consumed = true;
         }
         if (inputFrame.tabNext()) {
-            pressKey(handledScreen, GLFW.GLFW_KEY_TAB);
+            consumed = pressKey(handledScreen, GLFW.GLFW_KEY_TAB) || consumed;
         }
         if (inputFrame.tabPrev()) {
-            pressKey(handledScreen, GLFW.GLFW_KEY_TAB, GLFW.GLFW_MOD_SHIFT);
+            consumed = pressKey(handledScreen, GLFW.GLFW_KEY_TAB, GLFW.GLFW_MOD_SHIFT) || consumed;
         }
         if (inputFrame.pageNext()) {
-            pressKey(handledScreen, GLFW.GLFW_KEY_PAGE_DOWN);
+            consumed = pressKey(handledScreen, GLFW.GLFW_KEY_PAGE_DOWN) || consumed;
         }
         if (inputFrame.pagePrev()) {
-            pressKey(handledScreen, GLFW.GLFW_KEY_PAGE_UP);
+            consumed = pressKey(handledScreen, GLFW.GLFW_KEY_PAGE_UP) || consumed;
         }
-        return true;
+        if (inputFrame.back()) {
+            triggerBack(handledScreen);
+            consumed = true;
+        }
+        return consumed;
     }
 
     private static boolean handleListNavigation(
         Screen screen,
         AlwaysSelectedEntryListWidget<?> listWidget,
-        GuiInputFrame inputFrame,
-        boolean preferListFocus
+        GuiInputFrame inputFrame
     ) {
-        if (screen == null || listWidget == null || inputFrame == null || !preferListFocus) {
-            return false;
-        }
-
-        boolean directionalOrPage = inputFrame.up()
-            || inputFrame.down()
-            || inputFrame.pageNext()
-            || inputFrame.pagePrev();
-        boolean listFocused = screen.getFocused() == listWidget;
-        boolean routeToList = (preferListFocus && directionalOrPage)
-            || (listFocused && (directionalOrPage || inputFrame.confirm()));
-        if (!routeToList) {
+        if (screen == null || listWidget == null || inputFrame == null) {
             return false;
         }
 
@@ -319,8 +555,18 @@ public final class GuiNavigationController {
                 || used;
         }
 
-        // Only consume when we actually routed a list action, so focused buttons still receive confirm.
-        return used || routeToList;
+        if (inputFrame.tabNext()) {
+            used = pressKey(screen, GLFW.GLFW_KEY_TAB) || used;
+        }
+        if (inputFrame.tabPrev()) {
+            used = pressKey(screen, GLFW.GLFW_KEY_TAB, GLFW.GLFW_MOD_SHIFT) || used;
+        }
+        if (inputFrame.back()) {
+            triggerBack(screen);
+            used = true;
+        }
+
+        return used;
     }
 
     private static int handleLinearSettingsNavigation(
@@ -371,6 +617,44 @@ public final class GuiNavigationController {
             triggerBack(screen);
         }
         return selectedIndex;
+    }
+
+    private enum NavigationMode {
+        WIDGETS,
+        LIST,
+        INVENTORY,
+        TEXT_INPUT
+    }
+
+    private enum NavigationDirection {
+        UP(0, -1),
+        DOWN(0, 1),
+        LEFT(-1, 0),
+        RIGHT(1, 0);
+
+        private final int x;
+        private final int y;
+
+        NavigationDirection(int x, int y) {
+            this.x = x;
+            this.y = y;
+        }
+
+        int x() {
+            return x;
+        }
+
+        int y() {
+            return y;
+        }
+
+        boolean horizontal() {
+            return x != 0;
+        }
+
+        boolean vertical() {
+            return y != 0;
+        }
     }
 
     private static List<GuiFocusElement> collectFocusElements(Screen screen) {
@@ -433,11 +717,6 @@ public final class GuiNavigationController {
                 bestScore = score;
                 bestIndex = i;
             }
-        }
-
-        if (bestIndex == currentIndex && elements.size() > 1) {
-            int step = (directionX > 0 || directionY > 0) ? 1 : -1;
-            return Math.floorMod(currentIndex + step, elements.size());
         }
         return bestIndex;
     }

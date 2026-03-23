@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 7,
+  "schemaVersion": 8,
   "_documentation": [
     "BetterController V2 config",
     "Set activeLayout manually or enable autoSwitchLayoutByControllerType to switch automatically by detected controller type.",
@@ -8,6 +8,7 @@
     "lookResponseCurve supports: linear, exponential_light, exponential_strong.",
     "activePreset supports: console, smooth, precision, southpaw.",
     "lookSpeedMultiplier controls overall camera speed.",
+    "menuAxisPressThreshold/menuAxisReleaseThreshold add hysteresis for cleaner menu stick navigation.",
     "menuInitialRepeatDelayMs/menuRepeatIntervalMs control menu navigation repeat speed.",
     "vibrationEventIntensity lets you scale rumble strength per event (0.0 to 2.0)."
   ],
@@ -34,6 +35,8 @@
   "cameraSmoothingStrength": 0.35,
   "triggerThreshold": 0.45,
   "menuAxisThreshold": 0.35,
+  "menuAxisPressThreshold": 0.40,
+  "menuAxisReleaseThreshold": 0.20,
   "menuInitialRepeatDelayMs": 140,
   "menuRepeatIntervalMs": 55,
   "hudHintsEnabled": true,

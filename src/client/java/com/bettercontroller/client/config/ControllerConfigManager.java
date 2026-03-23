@@ -205,6 +205,16 @@ public final class ControllerConfigManager {
         config.lookSpeedMultiplier = clamp(config.lookSpeedMultiplier, 0.5F, 4.0F, 2.25F);
         config.triggerThreshold = clamp(config.triggerThreshold, 0.01F, 1.0F, 0.45F);
         config.menuAxisThreshold = clamp(config.menuAxisThreshold, 0.2F, 0.95F, 0.35F);
+        config.menuAxisPressThreshold = clamp(
+            config.menuAxisPressThreshold,
+            0.2F,
+            0.95F,
+            clamp(config.menuAxisThreshold, 0.2F, 0.95F, 0.40F)
+        );
+        config.menuAxisReleaseThreshold = clamp(config.menuAxisReleaseThreshold, 0.05F, 0.90F, 0.20F);
+        if (config.menuAxisReleaseThreshold >= config.menuAxisPressThreshold) {
+            config.menuAxisReleaseThreshold = Math.max(0.05F, config.menuAxisPressThreshold - 0.10F);
+        }
         config.menuInitialRepeatDelayMs = clampInt(config.menuInitialRepeatDelayMs, 60, 400, 140);
         config.menuRepeatIntervalMs = clampInt(config.menuRepeatIntervalMs, 20, 200, 55);
         config.cameraSmoothingStrength = clamp(config.cameraSmoothingStrength, 0.0F, 1.0F, 0.35F);
@@ -258,6 +268,14 @@ public final class ControllerConfigManager {
 
         if (loadedSchemaVersion < 5 && config.axes != null && isLegacyInvertedLookY(config.axes.look_y)) {
             config.axes.look_y = "RIGHT_Y";
+            changed = true;
+        }
+
+        if (loadedSchemaVersion < 8) {
+            float migratedPress = clamp(config.menuAxisThreshold, 0.2F, 0.95F, 0.40F);
+            float migratedRelease = clamp(Math.min(0.20F, migratedPress - 0.10F), 0.05F, 0.90F, 0.20F);
+            config.menuAxisPressThreshold = migratedPress;
+            config.menuAxisReleaseThreshold = migratedRelease;
             changed = true;
         }
 
