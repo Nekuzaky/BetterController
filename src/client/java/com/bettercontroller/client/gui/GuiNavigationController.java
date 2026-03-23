@@ -4,6 +4,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.Element;
 import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.gui.screen.ingame.CreativeInventoryScreen;
 import net.minecraft.client.gui.screen.ingame.HandledScreen;
 import net.minecraft.client.gui.widget.AlwaysSelectedEntryListWidget;
 import net.minecraft.client.gui.widget.ClickableWidget;
@@ -73,6 +74,14 @@ public final class GuiNavigationController {
         }
 
         boolean focusedTextInput = screen.getFocused() instanceof TextFieldWidget;
+        if (focusedTextInput
+            && screen instanceof HandledScreen<?>
+            && (inputFrame.up() || inputFrame.down() || inputFrame.left() || inputFrame.right())) {
+            // Let D-pad/stick immediately reclaim inventory navigation on handled screens
+            // (notably Creative inventory search field focus).
+            screen.setFocused(null);
+            focusedTextInput = false;
+        }
         if (screen instanceof HandledScreen<?> handledScreen && !focusedTextInput) {
             boolean captureCursor = (System.currentTimeMillis() - lastControllerUiInputMs) <= CONTROLLER_CURSOR_CAPTURE_TIMEOUT_MS;
             boolean handledInventoryNavigation = handleHandledScreenNavigation(
@@ -244,6 +253,18 @@ public final class GuiNavigationController {
         inventorySelectionState.setSelectedSlot(handledScreen, selectedSlot);
         if (inputFrame.confirm()) {
             clickHandledSlot(client, handledScreen, selectedSlot);
+        }
+        if (inputFrame.tabNext()) {
+            pressKey(handledScreen, GLFW.GLFW_KEY_TAB);
+        }
+        if (inputFrame.tabPrev()) {
+            pressKey(handledScreen, GLFW.GLFW_KEY_TAB, GLFW.GLFW_MOD_SHIFT);
+        }
+        if (inputFrame.pageNext()) {
+            pressKey(handledScreen, GLFW.GLFW_KEY_PAGE_DOWN);
+        }
+        if (inputFrame.pagePrev()) {
+            pressKey(handledScreen, GLFW.GLFW_KEY_PAGE_UP);
         }
         return true;
     }
@@ -728,6 +749,10 @@ public final class GuiNavigationController {
                 slots.add(slot);
             }
         }
+        if (screen instanceof CreativeInventoryScreen) {
+            slots = filterVisibleCreativeSlots(slots);
+            enabledSlots = filterVisibleCreativeSlots(enabledSlots);
+        }
         if (!slots.isEmpty()) {
             return slots;
         }
@@ -735,6 +760,22 @@ public final class GuiNavigationController {
             return enabledSlots;
         }
         return screen.getScreenHandler().slots;
+    }
+
+    private static List<Slot> filterVisibleCreativeSlots(List<Slot> source) {
+        if (source == null || source.isEmpty()) {
+            return source;
+        }
+        List<Slot> filtered = new ArrayList<>(source.size());
+        for (Slot slot : source) {
+            if (slot == null) {
+                continue;
+            }
+            if (slot.x >= 0 && slot.y >= 0 && slot.x <= 400 && slot.y <= 400) {
+                filtered.add(slot);
+            }
+        }
+        return filtered.isEmpty() ? source : filtered;
     }
 
     private static Slot findSlotById(List<Slot> slots, int slotId) {

@@ -1,15 +1,16 @@
 package com.bettercontroller.client.render;
 
+import com.bettercontroller.BetterControllerMod;
 import com.bettercontroller.client.config.ControllerConfig;
 import com.bettercontroller.client.gui.ControllerInventorySelectionState;
 import com.bettercontroller.client.input.ControllerRuntime;
+import com.bettercontroller.client.mixin.HandledScreenAccessor;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.ingame.HandledScreen;
 import net.minecraft.screen.slot.Slot;
 import net.minecraft.text.Text;
 
-import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -18,11 +19,7 @@ import java.util.Locale;
  * Draws an always-visible controller selection highlight and an in-screen help panel for container navigation.
  */
 public final class ControllerInventoryHighlightRenderer {
-    private static final Field HANDLED_X_FIELD = resolveIntField("x");
-    private static final Field HANDLED_Y_FIELD = resolveIntField("y");
-    private static final Field HANDLED_BACKGROUND_WIDTH_FIELD = resolveIntField("backgroundWidth");
-    private static final Field HANDLED_BACKGROUND_HEIGHT_FIELD = resolveIntField("backgroundHeight");
-
+    private static boolean warnedMissingHandledScreenAccessor;
     private static final int GUIDE_PANEL_DEFAULT_WIDTH = 166;
     private static final int GUIDE_PANEL_COMPACT_WIDTH = 136;
     private static final int GUIDE_PANEL_ULTRA_WIDTH = 108;
@@ -66,8 +63,8 @@ public final class ControllerInventoryHighlightRenderer {
             return;
         }
 
-        int screenX = readInt(HANDLED_X_FIELD, handledScreen, 0);
-        int screenY = readInt(HANDLED_Y_FIELD, handledScreen, 0);
+        int screenX = handledScreenX(handledScreen);
+        int screenY = handledScreenY(handledScreen);
 
         int left = screenX + selectedSlot.x - 2;
         int top = screenY + selectedSlot.y - 2;
@@ -130,10 +127,10 @@ public final class ControllerInventoryHighlightRenderer {
 
         int screenWidth = context.getScaledWindowWidth();
         int screenHeight = context.getScaledWindowHeight();
-        int screenX = readInt(HANDLED_X_FIELD, handledScreen, 0);
-        int screenY = readInt(HANDLED_Y_FIELD, handledScreen, 0);
-        int handledWidth = readInt(HANDLED_BACKGROUND_WIDTH_FIELD, handledScreen, 176);
-        int handledHeight = readInt(HANDLED_BACKGROUND_HEIGHT_FIELD, handledScreen, 166);
+        int screenX = handledScreenX(handledScreen);
+        int screenY = handledScreenY(handledScreen);
+        int handledWidth = handledBackgroundWidth(handledScreen);
+        int handledHeight = handledBackgroundHeight(handledScreen);
 
         int rightSpace = Math.max(0, screenWidth - (screenX + handledWidth) - GUIDE_PANEL_MARGIN);
         int leftSpace = Math.max(0, screenX - GUIDE_PANEL_MARGIN);
@@ -477,32 +474,11 @@ public final class ControllerInventoryHighlightRenderer {
         return parts;
     }
 
-    private static Field resolveIntField(String name) {
-        try {
-            Field field = HandledScreen.class.getDeclaredField(name);
-            field.setAccessible(true);
-            return field;
-        } catch (Exception ignored) {
-            return null;
-        }
-    }
-
     private static int clamp(int value, int min, int max) {
         if (max < min) {
             return min;
         }
         return Math.max(min, Math.min(max, value));
-    }
-
-    private static int readInt(Field field, HandledScreen<?> screen, int fallback) {
-        if (field == null || screen == null) {
-            return fallback;
-        }
-        try {
-            return field.getInt(screen);
-        } catch (IllegalAccessException ignored) {
-            return fallback;
-        }
     }
 
     private static void drawCornerMarkers(
@@ -527,5 +503,45 @@ public final class ControllerInventoryHighlightRenderer {
 
         context.fill(right + 1 - length, bottom, right + 1, bottom + 1, color);
         context.fill(right, bottom + 1 - length, right + 1, bottom + 1, color);
+    }
+
+    private static int handledScreenX(HandledScreen<?> screen) {
+        if (screen instanceof HandledScreenAccessor accessor) {
+            return accessor.bettercontroller$getX();
+        }
+        warnHandledAccessorMissing();
+        return 0;
+    }
+
+    private static int handledScreenY(HandledScreen<?> screen) {
+        if (screen instanceof HandledScreenAccessor accessor) {
+            return accessor.bettercontroller$getY();
+        }
+        warnHandledAccessorMissing();
+        return 0;
+    }
+
+    private static int handledBackgroundWidth(HandledScreen<?> screen) {
+        if (screen instanceof HandledScreenAccessor accessor) {
+            return accessor.bettercontroller$getBackgroundWidth();
+        }
+        warnHandledAccessorMissing();
+        return 176;
+    }
+
+    private static int handledBackgroundHeight(HandledScreen<?> screen) {
+        if (screen instanceof HandledScreenAccessor accessor) {
+            return accessor.bettercontroller$getBackgroundHeight();
+        }
+        warnHandledAccessorMissing();
+        return 166;
+    }
+
+    private static void warnHandledAccessorMissing() {
+        if (warnedMissingHandledScreenAccessor) {
+            return;
+        }
+        warnedMissingHandledScreenAccessor = true;
+        BetterControllerMod.LOGGER.warn("HandledScreen accessor unavailable; inventory highlight layout fallback is active.");
     }
 }

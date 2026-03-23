@@ -1,5 +1,6 @@
 package com.bettercontroller.client.config;
 
+import com.bettercontroller.client.haptics.HapticEvent;
 import com.bettercontroller.client.polling.ControllerType;
 
 import java.util.ArrayList;
@@ -10,7 +11,7 @@ import java.util.Locale;
 import java.util.Map;
 
 public final class ControllerConfig {
-    public int schemaVersion = 6;
+    public int schemaVersion = 7;
     public boolean autoActivateOnController = true;
     public boolean autoSwitchLayoutByControllerType = true;
     public String activeLayout = "xbox";
@@ -39,6 +40,7 @@ public final class ControllerConfig {
     public boolean radialConfirmOnRelease = true;
     public boolean vibrationEnabled = true;
     public String vibrationIntensity = "medium";
+    public LinkedHashMap<String, Float> vibrationEventIntensity = defaultVibrationEventIntensity();
     public boolean virtualKeyboardEnabled = true;
 
     public AxisBindings axes = defaultAxes(false);
@@ -75,6 +77,9 @@ public final class ControllerConfig {
         if (vibrationIntensity == null || vibrationIntensity.isBlank()) {
             vibrationIntensity = fallback.vibrationIntensity;
         }
+        if (vibrationEventIntensity == null || vibrationEventIntensity.isEmpty()) {
+            vibrationEventIntensity = fallback.vibrationEventIntensity;
+        }
         if (lookSpeedMultiplier <= 0.0F) {
             lookSpeedMultiplier = fallback.lookSpeedMultiplier;
         }
@@ -95,6 +100,7 @@ public final class ControllerConfig {
         mergeMissingBindings(bindings, fallback.bindings);
         mergeMissingLayouts(layouts, fallback.layouts);
         mergeMissingControllerTypeLayouts(controllerTypeLayouts, fallback.controllerTypeLayouts);
+        mergeMissingVibrationEventIntensity(vibrationEventIntensity, fallback.vibrationEventIntensity);
     }
 
     public ResolvedLayout resolveLayout(ControllerType controllerType) {
@@ -131,6 +137,14 @@ public final class ControllerConfig {
         map.put("switch", "switch");
         map.put("generic", "generic");
         map.put("none", "xbox");
+        return map;
+    }
+
+    private static LinkedHashMap<String, Float> defaultVibrationEventIntensity() {
+        LinkedHashMap<String, Float> map = new LinkedHashMap<>();
+        for (HapticEvent event : HapticEvent.values()) {
+            map.put(event.configKey(), event.defaultIntensityMultiplier());
+        }
         return map;
     }
 
@@ -245,6 +259,18 @@ public final class ControllerConfig {
         LinkedHashMap<String, String> fallback
     ) {
         for (Map.Entry<String, String> entry : fallback.entrySet()) {
+            target.putIfAbsent(entry.getKey(), entry.getValue());
+        }
+    }
+
+    private static void mergeMissingVibrationEventIntensity(
+        LinkedHashMap<String, Float> target,
+        LinkedHashMap<String, Float> fallback
+    ) {
+        if (target == null || fallback == null) {
+            return;
+        }
+        for (Map.Entry<String, Float> entry : fallback.entrySet()) {
             target.putIfAbsent(entry.getKey(), entry.getValue());
         }
     }

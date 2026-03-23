@@ -17,6 +17,7 @@ import com.bettercontroller.client.radial.RadialMenuController;
 import com.bettercontroller.client.translation.GameplayInputFrame;
 import com.bettercontroller.client.translation.InputTranslator;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.text.Text;
 import net.minecraft.util.hit.HitResult;
 
 import java.nio.file.Path;
@@ -159,7 +160,7 @@ public final class ControllerRuntime {
             latestFrame = GameplayInputFrame.empty();
             glyphService.updateControllerType(ControllerType.NONE);
             if (wasControllerConnected) {
-                pushRuntimeStatus("Controller disconnected. Keyboard/mouse fallback restored.", 3200L);
+                pushRuntimeStatus(Text.translatable("bettercontroller.status.disconnected").getString(), 3200L);
             }
             wasControllerConnected = false;
             previousJoystickId = -1;
@@ -178,12 +179,16 @@ public final class ControllerRuntime {
         activeLayout = latestConfig.resolveLayout(activeControllerType);
         if (!wasControllerConnected || previousJoystickId != latestSnapshot.joystickId()) {
             pushRuntimeStatus(
-                "Controller connected: " + latestSnapshot.joystickName() + " (" + activeControllerType + ")",
+                Text.translatable(
+                    "bettercontroller.status.connected",
+                    latestSnapshot.joystickName(),
+                    activeControllerType
+                ).getString(),
                 3000L
             );
         } else if (previousControllerType != activeControllerType) {
             pushRuntimeStatus(
-                "Controller profile switched to " + activeControllerType + ".",
+                Text.translatable("bettercontroller.status.profile_switched", activeControllerType).getString(),
                 2400L
             );
         }

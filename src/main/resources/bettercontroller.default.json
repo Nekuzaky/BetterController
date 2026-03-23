@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 6,
+  "schemaVersion": 7,
   "_documentation": [
     "BetterController V2 config",
     "Set activeLayout manually or enable autoSwitchLayoutByControllerType to switch automatically by detected controller type.",
@@ -8,7 +8,8 @@
     "lookResponseCurve supports: linear, exponential_light, exponential_strong.",
     "activePreset supports: console, smooth, precision, southpaw.",
     "lookSpeedMultiplier controls overall camera speed.",
-    "menuInitialRepeatDelayMs/menuRepeatIntervalMs control menu navigation repeat speed."
+    "menuInitialRepeatDelayMs/menuRepeatIntervalMs control menu navigation repeat speed.",
+    "vibrationEventIntensity lets you scale rumble strength per event (0.0 to 2.0)."
   ],
   "autoActivateOnController": true,
   "autoSwitchLayoutByControllerType": true,
@@ -42,6 +43,12 @@
   "radialConfirmOnRelease": true,
   "vibrationEnabled": true,
   "vibrationIntensity": "medium",
+  "vibrationEventIntensity": {
+    "damage_taken": 1.0,
+    "explosion_nearby": 1.2,
+    "block_break": 0.45,
+    "landing": 0.7
+  },
   "virtualKeyboardEnabled": true,
   "axes": {
     "move_x": "LEFT_X",

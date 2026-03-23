@@ -78,7 +78,7 @@ public final class BetterControllerSettingsScreen extends Screen {
     private int statusColor = 0xFFD1D5DB;
 
     public BetterControllerSettingsScreen(Screen parent, ControllerRuntime runtime) {
-        super(Text.literal("BetterController Settings"));
+        super(Text.translatable("bettercontroller.screen.settings.title"));
         this.parent = parent;
         this.runtime = runtime;
         loadFromConfig();

@@ -2,7 +2,7 @@
 
 BetterController is a client-side Fabric mod for premium controller support in Minecraft.
 
-## Stack (as of 2026-03-14)
+## Stack (as of 2026-03-23)
 - Minecraft: `1.21.11`
 - Java: `21`
 - Fabric Loader: `0.18.4`
@@ -37,11 +37,16 @@ BetterController is a client-side Fabric mod for premium controller support in M
 - Controller inventory/handled-screen navigation:
   - directional slot navigation
   - confirm to pick/place stack
+- Creative inventory navigation polish:
+  - directional input can reclaim inventory focus from creative search text field
+  - tab/page inputs are forwarded on handled screens
+- Jump input includes edge-tap + airborne assist for more reliable creative/fly double-jump toggles.
 - Debug overlay (toggle with `F8`).
 - Haptics architecture (`ControllerHaptics`, `HapticEvent`, `HapticProfile`) with graceful no-op fallback on unsupported backends.
-- Chat binding support with optional Windows OSK launch.
+- Chat binding support with an in-game virtual keyboard overlay.
+- Virtual keyboard `Enter` now submits chat messages and slash commands directly.
 
-## Feature Status (2026-03-14)
+## Feature Status (2026-03-23)
 Implemented and usable now:
 - Controller gameplay input (movement, look, actions, hotbar, remapping).
 - Controller GUI navigation for common screens and handled inventories (inventory/chests-style screens).
@@ -51,7 +56,8 @@ Implemented and usable now:
 
 Current limitations:
 - Haptics/vibration is currently a graceful no-op in the GLFW backend (architecture is ready, runtime rumble is not active yet).
-- Virtual keyboard launcher currently targets Windows `osk` only and can fail on systems requiring elevation.
+- Per-event haptic intensity profiles are configurable now, but physical rumble output still depends on backend support.
+- Virtual keyboard opens only when a text field is available/focused; behavior can vary on heavily customized modded UIs.
 - GUI navigation works, but edge-case polish across every modded/custom screen is still ongoing.
 
 ## Config
@@ -81,6 +87,7 @@ Current limitations:
 - `radialMenuSlots`
 - `vibrationEnabled`
 - `vibrationIntensity` (`off`, `low`, `medium`, `strong`)
+- `vibrationEventIntensity.<event>` (`damage_taken`, `explosion_nearby`, `block_break`, `landing`) with values from `0.0` to `2.0`
 - `virtualKeyboardEnabled`
 
 ### Rebinding format
@@ -120,6 +127,9 @@ Linux/macOS:
 
 Build output:
 - `build/libs/`
+
+CI:
+- GitHub Actions workflow (`.github/workflows/ci.yml`) runs `./gradlew build` on push and pull requests.
 
 ## Creator Setup (Before Build)
 If you are a creator/testing release builds, check these values first:

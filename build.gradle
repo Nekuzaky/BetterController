@@ -21,6 +21,13 @@ loom {
     }
 }
 
+sourceSets {
+    test {
+        compileClasspath += sourceSets.main.output + sourceSets.client.output
+        runtimeClasspath += sourceSets.main.output + sourceSets.client.output
+    }
+}
+
 repositories {
     mavenCentral()
     maven {
@@ -34,6 +41,10 @@ dependencies {
     mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+
+    testImplementation platform("org.junit:junit-bom:5.12.2")
+    testImplementation "org.junit.jupiter:junit-jupiter"
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher"
 }
 
 processResources {
@@ -46,6 +57,10 @@ processResources {
 
 tasks.withType(JavaCompile).configureEach {
     it.options.release = 21
+}
+
+tasks.named("test", Test).configure {
+    useJUnitPlatform()
 }
 
 java {

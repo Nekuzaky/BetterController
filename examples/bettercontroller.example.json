@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 5,
+  "schemaVersion": 7,
   "autoActivateOnController": true,
   "autoSwitchLayoutByControllerType": true,
   "activeLayout": "xbox",
@@ -29,6 +29,12 @@
   "radialConfirmOnRelease": true,
   "vibrationEnabled": true,
   "vibrationIntensity": "medium",
+  "vibrationEventIntensity": {
+    "damage_taken": 1.0,
+    "explosion_nearby": 1.2,
+    "block_break": 0.45,
+    "landing": 0.7
+  },
   "virtualKeyboardEnabled": true,
   "axes": {
     "move_x": "LEFT_X",

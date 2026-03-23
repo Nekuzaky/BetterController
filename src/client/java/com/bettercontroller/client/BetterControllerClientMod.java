@@ -73,7 +73,8 @@ public class BetterControllerClientMod implements ClientModInitializer {
             return;
         }
 
-        String buttonLabel = "Controller Settings...";
+        Text buttonText = Text.translatable("bettercontroller.ui.open_settings");
+        String buttonLabel = buttonText.getString();
         boolean alreadyPresent = Screens.getButtons(screen).stream()
             .anyMatch(widget -> widget instanceof ButtonWidget button
                 && buttonLabel.equals(button.getMessage().getString()));
@@ -91,7 +92,7 @@ public class BetterControllerClientMod implements ClientModInitializer {
         }
 
         ButtonWidget button = ButtonWidget.builder(
-            Text.literal(buttonLabel),
+            buttonText,
             widget -> client.setScreen(new BetterControllerSettingsScreen(screen, controllerRuntime))
         ).dimensions(x, y, width, 20).build();
         Screens.getButtons(screen).add(button);

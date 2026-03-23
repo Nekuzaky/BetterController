@@ -1,5 +1,8 @@
 package com.bettercontroller.client.input;
 
+import com.bettercontroller.BetterControllerMod;
+import com.bettercontroller.client.mixin.InputAccessor;
+import com.bettercontroller.client.mixin.KeyBindingAccessor;
 import com.bettercontroller.client.translation.GameplayInputFrame;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.input.Input;
@@ -10,11 +13,11 @@ import net.minecraft.util.PlayerInput;
 import net.minecraft.util.math.Vec2f;
 import net.minecraft.network.packet.c2s.play.UpdateSelectedSlotC2SPacket;
 
-import java.lang.reflect.Field;
-
 public final class MinecraftInputApplier {
-    private static final Field BOUND_KEY_FIELD = resolveBoundKeyField();
-    private static final Field MOVEMENT_VECTOR_FIELD = resolveMovementVectorField();
+    private static boolean warnedMissingBoundKeyAccessor;
+    private static boolean warnedMissingMovementVectorAccessor;
+    private boolean previousJumpHeld;
+    private boolean pendingFlightAssistTap;
     private boolean previousAttackHeld;
     private boolean previousUseHeld;
 
@@ -28,7 +31,7 @@ public final class MinecraftInputApplier {
         setHold(client.options.backKey, frame.moveBackward());
         setHold(client.options.leftKey, frame.moveLeft());
         setHold(client.options.rightKey, frame.moveRight());
-        setHold(client.options.jumpKey, frame.jumpHeld());
+        applyJumpKey(client, client.options.jumpKey, frame.jumpHeld());
         setHold(client.options.sprintKey, frame.sprintHeld());
         setHold(client.options.sneakKey, frame.sneakHeld());
         applyActionKey(client.options.attackKey, frame.attackHeld(), true);
@@ -90,6 +93,8 @@ public final class MinecraftInputApplier {
         setHold(client.options.attackKey, false);
         setHold(client.options.useKey, false);
         setHold(client.options.playerListKey, false);
+        previousJumpHeld = false;
+        pendingFlightAssistTap = false;
         previousAttackHeld = false;
         previousUseHeld = false;
     }
@@ -165,6 +170,35 @@ public final class MinecraftInputApplier {
         keyBinding.setPressed(pressed);
     }
 
+    private void applyJumpKey(MinecraftClient client, KeyBinding keyBinding, boolean held) {
+        if (pendingFlightAssistTap) {
+            tap(keyBinding);
+            pendingFlightAssistTap = false;
+        }
+
+        // Creative flight toggles rely on discrete jump presses; pulse on rising edge,
+        // then keep the key held for normal jump/fly-up behavior.
+        if (held && !previousJumpHeld) {
+            tap(keyBinding);
+            if (shouldQueueFlightAssistTap(client)) {
+                pendingFlightAssistTap = true;
+            }
+        }
+        setHold(keyBinding, held);
+        previousJumpHeld = held;
+    }
+
+    private static boolean shouldQueueFlightAssistTap(MinecraftClient client) {
+        if (client == null || client.player == null) {
+            return false;
+        }
+        if (!client.player.getAbilities().allowFlying || client.player.getAbilities().flying) {
+            return false;
+        }
+        // Assist second tap while airborne to make creative/fly toggles more reliable on controllers.
+        return !client.player.isOnGround();
+    }
+
     private void applyActionKey(KeyBinding keyBinding, boolean held, boolean isAttack) {
         boolean wasHeld = isAttack ? previousAttackHeld : previousUseHeld;
         // Pulse a tap on rising edge so actions also trigger when not targeting blocks/entities.
@@ -180,28 +214,18 @@ public final class MinecraftInputApplier {
     }
 
     private static InputUtil.Key readBoundKey(KeyBinding keyBinding) {
-        if (BOUND_KEY_FIELD == null) {
-            return null;
+        if (keyBinding instanceof KeyBindingAccessor accessor) {
+            return accessor.bettercontroller$getBoundKey();
         }
-        try {
-            return (InputUtil.Key) BOUND_KEY_FIELD.get(keyBinding);
-        } catch (IllegalAccessException ignored) {
-            return null;
+        if (!warnedMissingBoundKeyAccessor) {
+            warnedMissingBoundKeyAccessor = true;
+            BetterControllerMod.LOGGER.warn("KeyBinding accessor unavailable; controller tap fallback path is active.");
         }
-    }
-
-    private static Field resolveBoundKeyField() {
-        try {
-            Field field = KeyBinding.class.getDeclaredField("boundKey");
-            field.setAccessible(true);
-            return field;
-        } catch (Exception ignored) {
-            return null;
-        }
+        return null;
     }
 
     private static void setMovementVector(Input input, float moveX, float moveY) {
-        if (input == null || MOVEMENT_VECTOR_FIELD == null) {
+        if (input == null) {
             return;
         }
 
@@ -214,19 +238,13 @@ public final class MinecraftInputApplier {
             clampedY *= scale;
         }
 
-        try {
-            MOVEMENT_VECTOR_FIELD.set(input, new Vec2f(clampedX, clampedY));
-        } catch (IllegalAccessException ignored) {
+        if (input instanceof InputAccessor accessor) {
+            accessor.bettercontroller$setMovementVector(new Vec2f(clampedX, clampedY));
+            return;
         }
-    }
-
-    private static Field resolveMovementVectorField() {
-        try {
-            Field field = Input.class.getDeclaredField("movementVector");
-            field.setAccessible(true);
-            return field;
-        } catch (Exception ignored) {
-            return null;
+        if (!warnedMissingMovementVectorAccessor) {
+            warnedMissingMovementVectorAccessor = true;
+            BetterControllerMod.LOGGER.warn("Input accessor unavailable; analog movement vector could not be applied.");
         }
     }
 }

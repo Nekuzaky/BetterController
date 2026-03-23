@@ -1,6 +1,7 @@
 package com.bettercontroller.client.config;
 
 import com.bettercontroller.BetterControllerMod;
+import com.bettercontroller.client.haptics.HapticEvent;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.Strictness;
@@ -27,6 +28,7 @@ public final class ControllerConfigManager {
     private final Path configPath;
     private ControllerConfig config;
     private FileTime lastKnownModifiedTime;
+    private Long lastKnownFileSize;
 
     public ControllerConfigManager() {
         this.configPath = FabricLoader.getInstance()
@@ -44,12 +46,20 @@ public final class ControllerConfigManager {
         }
 
         try {
-            if (Files.exists(configPath)) {
-                FileTime currentModifiedTime = Files.getLastModifiedTime(configPath);
-                if (lastKnownModifiedTime == null || currentModifiedTime.compareTo(lastKnownModifiedTime) > 0) {
-                    BetterControllerMod.LOGGER.info("Reloading controller config from disk.");
-                    return load();
-                }
+            if (!Files.exists(configPath)) {
+                BetterControllerMod.LOGGER.info("Controller config file missing. Recreating defaults.");
+                return load();
+            }
+
+            FileTime currentModifiedTime = Files.getLastModifiedTime(configPath);
+            long currentFileSize = Files.size(configPath);
+            boolean modifiedChanged = lastKnownModifiedTime == null
+                || currentModifiedTime.compareTo(lastKnownModifiedTime) != 0;
+            boolean sizeChanged = lastKnownFileSize == null
+                || currentFileSize != lastKnownFileSize;
+            if (modifiedChanged || sizeChanged) {
+                BetterControllerMod.LOGGER.info("Reloading controller config from disk.");
+                return load();
             }
         } catch (IOException exception) {
             BetterControllerMod.LOGGER.warn("Failed to check config timestamp: {}", exception.getMessage());
@@ -95,6 +105,7 @@ public final class ControllerConfigManager {
 
         this.config = loaded;
         this.lastKnownModifiedTime = readLastModified();
+        this.lastKnownFileSize = readFileSize();
         return loaded;
     }
 
@@ -110,6 +121,7 @@ public final class ControllerConfigManager {
 
         this.config = updatedConfig;
         this.lastKnownModifiedTime = readLastModified();
+        this.lastKnownFileSize = readFileSize();
         return updatedConfig;
     }
 
@@ -173,6 +185,17 @@ public final class ControllerConfigManager {
         return null;
     }
 
+    private Long readFileSize() {
+        try {
+            if (Files.exists(configPath)) {
+                return Files.size(configPath);
+            }
+        } catch (IOException exception) {
+            BetterControllerMod.LOGGER.warn("Failed reading controller config size: {}", exception.getMessage());
+        }
+        return null;
+    }
+
     private static void sanitize(ControllerConfig config) {
         config.movementDeadzone = clamp(config.movementDeadzone, 0.0F, 0.95F, 0.14F);
         config.lookDeadzone = clamp(config.lookDeadzone, 0.0F, 0.95F, 0.07F);
@@ -189,7 +212,22 @@ public final class ControllerConfigManager {
 
         config.lookResponseCurve = normalizeResponseCurve(config.lookResponseCurve);
         config.vibrationIntensity = normalizeVibrationIntensity(config.vibrationIntensity);
+        sanitizeVibrationEventIntensity(config);
         config.activePreset = ControllerPreset.fromId(config.activePreset).id();
+    }
+
+    private static void sanitizeVibrationEventIntensity(ControllerConfig config) {
+        if (config == null) {
+            return;
+        }
+        if (config.vibrationEventIntensity == null) {
+            config.vibrationEventIntensity = new java.util.LinkedHashMap<>();
+        }
+        for (HapticEvent event : HapticEvent.values()) {
+            Float raw = config.vibrationEventIntensity.get(event.configKey());
+            float sanitized = clamp(raw == null ? event.defaultIntensityMultiplier() : raw, 0.0F, 2.0F, event.defaultIntensityMultiplier());
+            config.vibrationEventIntensity.put(event.configKey(), sanitized);
+        }
     }
 
     private static boolean migrateLegacyDefaults(ControllerConfig config, int loadedSchemaVersion) {
