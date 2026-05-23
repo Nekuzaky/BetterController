@@ -1,0 +1,41 @@
+name: Feature request
+description: Suggest a controller capability that isn't currently supported.
+title: "[feat] "
+labels: [enhancement, needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The mod's scope is intentionally narrow: *playing Minecraft Java with a gamepad*. Requests
+        that add unrelated features (radial menus, vibration, custom HUDs, etc.) are likely to be
+        declined. Requests that improve core controller play are very welcome.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What can't you do today?
+      description: Describe the controller use case that currently doesn't work.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: How would you expect the controller to behave?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context (screenshots, related issues, etc.)
+    validations:
+      required: false
