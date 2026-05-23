@@ -1,0 +1,87 @@
+name: Bug report
+description: Report something the mod does wrong with a real gamepad.
+title: "[bug] "
+labels: [bug, needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug. Please run through the checklist below before submitting.
+
+  - type: checkboxes
+    id: prereqs
+    attributes:
+      label: Prerequisites
+      options:
+        - label: I am using the latest release of BetterController.
+          required: true
+        - label: I am on Minecraft 1.21.11 with Fabric Loader 0.18.4+ and Fabric API.
+          required: true
+        - label: I searched existing issues and didn't find a duplicate.
+          required: true
+
+  - type: input
+    id: mod-version
+    attributes:
+      label: BetterController version
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: input
+    id: controller
+    attributes:
+      label: Controller (model + connection)
+      placeholder: "Xbox Series X controller, USB"
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: OS
+      placeholder: "Windows 11 / Arch Linux / macOS 14"
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Be precise. "Double-tap A while standing on grass in creative" is good. "Doesn't work" is not.
+      placeholder: |
+        1. Open a creative world
+        2. Stand still
+        3. Press A twice within ~300 ms
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+    validations:
+      required: true
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Relevant config (paste `config/bettercontroller.json`)
+      render: json
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs (`logs/latest.log` excerpt, especially errors)
+      render: shell
+    validations:
+      required: false
