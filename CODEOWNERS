@@ -1,0 +1,22 @@
+# BetterController code owners
+# Every PR automatically requests review from the listed owner(s).
+# See https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+*                                   @Nekuzaky
+
+# Input pipeline & gameplay
+/src/client/java/com/bettercontroller/client/input/          @Nekuzaky
+/src/client/java/com/bettercontroller/client/translation/    @Nekuzaky
+/src/client/java/com/bettercontroller/client/polling/        @Nekuzaky
+
+# GUI navigation
+/src/client/java/com/bettercontroller/client/gui/            @Nekuzaky
+
+# Mixins (touch with care)
+/src/client/java/com/bettercontroller/client/mixin/          @Nekuzaky
+/src/client/resources/bettercontroller.client.mixins.json    @Nekuzaky
+
+# Build & CI
+/build.gradle           @Nekuzaky
+/gradle.properties      @Nekuzaky
+/.github/workflows/     @Nekuzaky

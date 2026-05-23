@@ -1,77 +1,105 @@
-# BetterController
+<h1 align="center">BetterController</h1>
+
+<p align="center">
+  <strong>Play Minecraft Java with any gamepad.</strong><br>
+  Lightweight, zero-allocation Fabric mod with analog look, full GUI navigation, creative double-tap fly and a virtual keyboard.
+</p>
 
 <p align="center">
   <a href="https://github.com/Nekuzaky/BetterController/actions/workflows/ci.yml">
-    <img alt="CI" src="https://github.com/Nekuzaky/BetterController/actions/workflows/ci.yml/badge.svg">
+    <img alt="CI" src="https://img.shields.io/github/actions/workflow/status/Nekuzaky/BetterController/ci.yml?branch=main&label=CI&logo=github">
   </a>
-  <img alt="Minecraft" src="https://img.shields.io/badge/minecraft-1.21.11-62b132">
+  <a href="https://github.com/Nekuzaky/BetterController/releases/latest">
+    <img alt="Release" src="https://img.shields.io/github/v/release/Nekuzaky/BetterController?include_prereleases&sort=semver&label=release&color=blue">
+  </a>
+  <a href="https://github.com/Nekuzaky/BetterController/releases">
+    <img alt="Downloads" src="https://img.shields.io/github/downloads/Nekuzaky/BetterController/total?color=brightgreen">
+  </a>
+  <img alt="Minecraft" src="https://img.shields.io/badge/minecraft-1.21.11-62b132?logo=minecraft&logoColor=white">
   <img alt="Fabric" src="https://img.shields.io/badge/fabric-0.18.4-blueviolet">
-  <img alt="Java" src="https://img.shields.io/badge/java-21-orange">
-  <img alt="License" src="https://img.shields.io/badge/license-MIT-blue">
+  <img alt="Java" src="https://img.shields.io/badge/java-21-orange?logo=openjdk&logoColor=white">
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/Nekuzaky/BetterController?color=blue"></a>
 </p>
 
-Client-side Fabric mod that lets you play Minecraft Java with a gamepad. Designed
-to be small, predictable, and zero-allocation in the hot path.
+<p align="center">
+  <a href="https://github.com/Nekuzaky/BetterController/issues">
+    <img alt="Issues" src="https://img.shields.io/github/issues/Nekuzaky/BetterController?color=informational">
+  </a>
+  <a href="https://github.com/Nekuzaky/BetterController/pulls">
+    <img alt="Pull requests" src="https://img.shields.io/github/issues-pr/Nekuzaky/BetterController?color=informational">
+  </a>
+  <a href="https://github.com/Nekuzaky/BetterController/stargazers">
+    <img alt="Stars" src="https://img.shields.io/github/stars/Nekuzaky/BetterController?style=social">
+  </a>
+</p>
 
-## Highlights
+---
 
-- Auto detect / disconnect, plug-and-play with any GLFW-compatible controller
-  (Xbox, PlayStation, Switch Pro, generic XInput).
-- Analog look + movement with deadzones, anti-deadzone, response curve,
-  adaptive smoothing.
-- Controller-driven GUI navigation: pause menu, options, inventory, chests,
-  creative search, world list, virtual keyboard for chat.
-- Right stick scrolls scrollable screens (creative inventory, world list...).
-- Creative double-tap A toggles flight reliably (no synthetic-pulse hacks).
-- In-game settings screen with the five sliders that matter; everything else
-  in `config/bettercontroller.json`.
-- Debug overlay (`F8`) showing raw axes, triggers, pressed buttons.
+## Why
 
-## Stack
+Minecraft has no native gamepad support on Java. Existing solutions ship 7k+
+lines of code and load 4 controller layouts even if you only own one stick.
+BetterController does one job — **make a gamepad feel native** — and tries to
+stay small, predictable and allocation-free while doing it.
 
-- Minecraft: `1.21.11`
-- Java: `21`
-- Fabric Loader: `0.18.4`
-- Fabric API: `0.141.3+1.21.11`
+## Features
+
+- **Plug-and-play.** Auto-detects Xbox, PlayStation, Switch Pro and generic
+  XInput controllers, swaps glyphs accordingly, survives hot-disconnect.
+- **Analog everything.** Per-axis deadzone, anti-deadzone, response curve,
+  adaptive smoothing on the right stick.
+- **Full GUI navigation.** Inventories, chests, creative search, options,
+  world list, virtual keyboard for chat. Right stick scrolls scrollable
+  screens (creative inventory, world list).
+- **Creative double-tap fly.** The original toggle works — no synthetic
+  jump pulses fighting Minecraft's native detection.
+- **5-slider settings screen.** Movement deadzone, look X / Y sensitivity,
+  look speed multiplier, trigger threshold. Everything else in JSON.
+- **Debug overlay** (`F8`) showing raw axes, triggers, processed vectors,
+  pressed buttons.
+- **No vibration noise, no radial menu bloat.** Removed on purpose — see
+  [Why no rumble?](#why-no-rumble) below.
 
 ## Install
 
-1. Install [Fabric Loader](https://fabricmc.net/use/) for Minecraft 1.21.11.
-2. Drop [Fabric API](https://modrinth.com/mod/fabric-api) into `mods/`.
-3. Drop `bettercontroller-<version>.jar` (from the [latest release](https://github.com/Nekuzaky/BetterController/releases)) into `mods/`.
-4. Launch the game with a controller connected.
+1. [Fabric Loader](https://fabricmc.net/use/) for Minecraft 1.21.11.
+2. [Fabric API](https://modrinth.com/mod/fabric-api) in `mods/`.
+3. `bettercontroller-<version>.jar` from the [latest release](https://github.com/Nekuzaky/BetterController/releases/latest) in `mods/`.
+4. Launch. Plug a controller. Done.
 
 ## Default bindings
 
-| Action          | Button       |
-|-----------------|--------------|
-| Movement        | Left stick   |
-| Look            | Right stick  |
-| Jump            | A / Cross    |
-| Sprint          | L3           |
-| Sneak           | R3           |
-| Attack / mine   | RT           |
-| Use / place     | LT           |
-| Inventory       | Y / Triangle |
-| Drop item       | B / Circle   |
-| Swap hands      | X / Square   |
-| Pick block / Hotbar next | RB  |
-| Hotbar previous | LB           |
-| Open chat       | D-pad up     |
-| Toggle perspective | D-pad down |
-| Pause           | Start        |
-| Player list     | Back / Select |
+| Action                   | Button         |
+|--------------------------|----------------|
+| Movement                 | Left stick     |
+| Look                     | Right stick    |
+| Menu scroll              | Right stick Y  |
+| Jump                     | A / Cross      |
+| Sprint                   | L3             |
+| Sneak                    | R3             |
+| Attack / mine            | RT             |
+| Use / place              | LT             |
+| Inventory                | Y / Triangle   |
+| Drop item                | B / Circle     |
+| Swap hands               | X / Square     |
+| Pick block / Hotbar next | RB             |
+| Hotbar previous          | LB             |
+| Open chat                | D-pad ↑        |
+| Toggle perspective       | D-pad ↓        |
+| Pause                    | Start          |
+| Player list              | Back / Select  |
 
-In menus: left stick / D-pad navigate, A confirms, B goes back, RB/LB switch
+Menus: D-pad / left stick navigate, A confirms, B goes back, RB/LB switch
 tabs, RT/LT page, right stick scrolls.
 
-## Configuration
+## Configure
 
-The runtime config lives at `config/bettercontroller.json` (auto-created on
-first launch). Edits are picked up live within ~500 ms.
+The runtime config is at `config/bettercontroller.json` and reloads live
+within ~500 ms.
 
-In-game settings screen (`Options -> Controls -> Controller Settings`, or the
-button on the pause menu) exposes the five sliders most users want to tune:
+The in-game settings screen
+(`Options → Controls → Controller Settings`, or the button on the pause
+menu) has the five sliders most users want:
 
 - Movement deadzone
 - Look sensitivity X
@@ -79,9 +107,10 @@ button on the pause menu) exposes the five sliders most users want to tune:
 - Look speed multiplier
 - Trigger threshold
 
-Everything else - look response curve, camera smoothing, key bindings, axes -
-is edited in the JSON. See [`src/main/resources/bettercontroller.default.json`](src/main/resources/bettercontroller.default.json)
-for the full schema and inline documentation.
+Everything else — response curve, smoothing, bindings, axes — lives in the
+JSON. See
+[`src/main/resources/bettercontroller.default.json`](src/main/resources/bettercontroller.default.json)
+for the full schema with comments.
 
 ### Rebinding
 
@@ -101,23 +130,53 @@ for the full schema and inline documentation.
 }
 ```
 
-- Bindings accept aliases (`A`/`CROSS`/`SWITCH_A`/`SOUTH`, `LB`/`L1`, ...).
+- Aliases supported: `A`/`CROSS`/`SWITCH_A`/`SOUTH`, `LB`/`L1`, `RT`/`R2`, ...
 - Prefix an axis token with `-` to invert it (e.g. `"-RIGHT_Y"`).
-- A single action can have multiple bindings: `"hotbar_next": ["RB", "RT"]`.
+- An action can have multiple bindings: `"hotbar_next": ["RB", "RT"]`.
 
 ### Quick tuning
 
-| Goal                          | Try                                              |
-|-------------------------------|--------------------------------------------------|
-| Snappier camera               | `lookSpeedMultiplier` 2.5 – 3.0                  |
-| Less stick drift              | `movementDeadzone` 0.14 – 0.18                   |
-| Softer center, fast outer     | `lookResponseCurve` `exponential_light`          |
-| Faster menu navigation        | `menuInitialRepeatDelayMs` 90, `menuRepeatIntervalMs` 30 |
-| Slower triggers feel laggy    | Lower `triggerThreshold` to 0.35                 |
+| Goal                       | Try                                                       |
+|----------------------------|-----------------------------------------------------------|
+| Snappier camera            | `lookSpeedMultiplier` 2.5–3.0                             |
+| Less stick drift           | `movementDeadzone` 0.14–0.18                              |
+| Softer center, fast outer  | `lookResponseCurve` `exponential_light`                   |
+| Faster menu navigation     | `menuInitialRepeatDelayMs` 90, `menuRepeatIntervalMs` 30  |
+| Slower triggers feel laggy | Lower `triggerThreshold` to 0.35                          |
+
+## Architecture
+
+```
+ControllerPoller
+     │  ControllerSnapshot
+     ▼
+InputTranslator ───► GameplayInputFrame  (mutable, reused per tick)
+     │
+     ├──► MinecraftInputApplier      keybindings + analog vector
+     │
+     └──► ControllerGuiNavigationHooks
+              │
+              ▼
+          GuiNavigationController
+              ├── SlotNavigator         (handled screens)
+              ├── WidgetNavigator       (clickable widgets)
+              ├── CreativeTabNavigator  (creative inventory tabs)
+              └── CursorCaptureManager  (OS cursor)
+```
+
+### Design constraints (NASA Power of Ten, adapted to Java)
+
+- **All functions stay under 60 lines.**
+- **Zero allocation in the steady-state tick loop.** `GameplayInputFrame` is
+  a single mutable instance, `input.movementVector` is mutated in place, and
+  `input.playerInput` is left to `KeyboardInput.tick` so Minecraft's native
+  rising-edge detection (used by creative double-tap fly) keeps working.
+- **No reflection.** `setSelectedTab` on the creative inventory is reached
+  through a Mixin Accessor / Invoker.
+- **All loops bounded.** Fixed-size snapshots, finite widget / slot lists.
+- **Validate at boundaries**, not in hot paths.
 
 ## Build from source
-
-Requires JDK 21.
 
 ```bash
 # Windows
@@ -131,49 +190,47 @@ Requires JDK 21.
 
 Artifacts land in `build/libs/bettercontroller-<version>.jar`.
 
-## Architecture
+Requires JDK 21 (Temurin, JBR, GraalVM — anything Java 21).
 
-```
-ControllerPoller
-   |  ControllerSnapshot
-   v
-InputTranslator ---->  GameplayInputFrame  (mutable, reused per tick)
-   |
-   +--> MinecraftInputApplier  -- in-world: keybindings + analog vector
-   |
-   +--> ControllerGuiNavigationHooks
-            |
-            v
-        GuiNavigationController
-            |  delegates to:
-            +-- NavigationModeResolver   (widget / list / inventory / text)
-            +-- SlotNavigator            (handled screens)
-            +-- WidgetNavigator          (clickable widgets)
-            +-- CreativeTabNavigator     (creative inventory tabs)
-            +-- CursorCaptureManager     (hide / restore OS cursor)
-```
+## FAQ
 
-### Design constraints (NASA Power of 10, adapted)
+### Why no rumble?
 
-- All functions stay under 60 lines.
-- The tick loop is zero-allocation in steady state: `GameplayInputFrame` is a
-  single mutable instance reused every tick; `input.movementVector` is set in
-  place; we no longer write `input.playerInput` (Minecraft's `KeyboardInput.tick`
-  rebuilds it from keybindings, which preserves the rising-edge detection used
-  by creative double-tap fly).
-- No reflection: `setSelectedTab` on the creative inventory and the
-  `selectedTab` static field are accessed via a Mixin Accessor / Invoker.
-- All loops are bounded (fixed-size snapshots, finite widget/slot lists).
-- Public entry points validate `null` at the boundary instead of asserting
-  inside the hot path.
+GLFW (the input backend Minecraft ships) doesn't expose a cross-platform
+rumble API. The old codebase carried a full haptics architecture that
+silently no-op'd. We deleted it. If LWJGL adds rumble support in a future
+release, it'll come back as a clean addition rather than dead architecture.
+
+### Why no radial menu?
+
+It was a custom feature competing with the vanilla hotbar and inventory.
+Both are already perfectly usable with a controller via this mod, so the
+radial menu added complexity without enough value. Removed.
+
+### Why single layout?
+
+The previous version duplicated bindings four times (Xbox / PlayStation /
+Switch / generic) to display friendly button names. Now the *bindings* are
+unified (generic token names) and the *glyphs* still adapt to your
+controller. Same UX, ~400 fewer lines of config.
+
+### My favourite controller isn't detected.
+
+Open an [issue](https://github.com/Nekuzaky/BetterController/issues/new?template=bug_report.yml)
+with the GLFW name and GUID — `F8` debug overlay shows both. Detection is
+heuristic and easy to extend.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) and the
-[pull request template](.github/PULL_REQUEST_TEMPLATE.md). Bug reports and
-feature requests go through the
-[issue templates](.github/ISSUE_TEMPLATE).
+See [CONTRIBUTING.md](CONTRIBUTING.md). The TL;DR:
+
+- Branch from `develop`, target `develop` in your PR.
+- One concern per PR.
+- Test with a real controller and describe what you tested.
+
+Read [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) and
+[SECURITY.md](SECURITY.md) for the rest.
 
 ## License
 
-[MIT](LICENSE).
+[MIT](LICENSE) — do what you want, just keep the copyright notice.
