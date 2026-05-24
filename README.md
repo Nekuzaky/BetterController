@@ -192,6 +192,29 @@ Artifacts land in `build/libs/bettercontroller-<version>.jar`.
 
 Requires JDK 21 (Temurin, JBR, GraalVM — anything Java 21).
 
+## Branching model
+
+The repo tracks several Minecraft versions in parallel:
+
+| Branch              | Tracks                                  | Status      |
+|---------------------|-----------------------------------------|-------------|
+| `main`              | Latest supported Minecraft version      | stable      |
+| `develop`           | Active development for the latest version | active    |
+| `fabric-1.21.11`    | Frozen archive — Fabric 0.18.4, MC 1.21.11 | maintenance |
+
+When Minecraft cuts a new major (e.g. 26.x), `main` migrates to it and the
+previous line gets a `fabric-<version>` branch so old releases stay
+buildable and patchable. To build a specific version, check out the
+matching branch:
+
+```bash
+git checkout fabric-1.21.11
+./gradlew build
+```
+
+Tags (`v0.1.0`, etc.) always point to the commit that produced a published
+release, regardless of which version branch it lives on.
+
 ## FAQ
 
 ### Why no rumble?
