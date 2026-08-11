@@ -33,6 +33,18 @@
   </a>
 </p>
 
+<p align="center">
+  <a href="https://buymeacoffee.com/Nekuzaky">
+    <img alt="Buy Me a Coffee" src="https://img.shields.io/badge/buy%20me%20a%20coffee-support-FFDD00?logo=buymeacoffee&logoColor=black">
+  </a>
+  <a href="https://www.patreon.com/Nekuzaky">
+    <img alt="Patreon" src="https://img.shields.io/badge/patreon-support-FF424D?logo=patreon&logoColor=white">
+  </a>
+  <a href="https://github.com/sponsors/Nekuzaky">
+    <img alt="GitHub Sponsors" src="https://img.shields.io/badge/sponsors-support-EA4AAA?logo=githubsponsors&logoColor=white">
+  </a>
+</p>
+
 ---
 
 ## Why
@@ -253,6 +265,19 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). The TL;DR:
 
 Read [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) and
 [SECURITY.md](SECURITY.md) for the rest.
+
+## Support
+
+BetterController is free and MIT-licensed, and it stays that way. If it made
+your gamepad usable and you want to help cover the time spent chasing
+Minecraft version bumps and controller quirks:
+
+- [**Buy Me a Coffee**](https://buymeacoffee.com/Nekuzaky) — one-off, no account needed.
+- [**Patreon**](https://www.patreon.com/Nekuzaky) — monthly, for build previews and version-bump notes.
+- [**GitHub Sponsors**](https://github.com/sponsors/Nekuzaky) — same thing, billed through GitHub.
+
+Nothing in the mod is paywalled and nothing ever will be. Starring the repo
+and filing good bug reports helps just as much.
 
 ## License
 
