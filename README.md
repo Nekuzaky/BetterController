@@ -15,6 +15,9 @@
   <a href="https://github.com/Nekuzaky/BetterController/releases">
     <img alt="Downloads" src="https://img.shields.io/github/downloads/Nekuzaky/BetterController/total?color=brightgreen">
   </a>
+  <a href="https://www.curseforge.com/minecraft/mc-mods/bettercontroller">
+    <img alt="CurseForge" src="https://img.shields.io/badge/curseforge-download-F16436?logo=curseforge&logoColor=white">
+  </a>
   <img alt="Minecraft" src="https://img.shields.io/badge/minecraft-1.21.11-62b132?logo=minecraft&logoColor=white">
   <img alt="Fabric" src="https://img.shields.io/badge/fabric-0.18.4-blueviolet">
   <img alt="Java" src="https://img.shields.io/badge/java-21-orange?logo=openjdk&logoColor=white">
@@ -76,8 +79,13 @@ stay small, predictable and allocation-free while doing it.
 
 1. [Fabric Loader](https://fabricmc.net/use/) for Minecraft 1.21.11.
 2. [Fabric API](https://modrinth.com/mod/fabric-api) in `mods/`.
-3. `bettercontroller-<version>.jar` from the [latest release](https://github.com/Nekuzaky/BetterController/releases/latest) in `mods/`.
+3. `bettercontroller-<version>.jar` in `mods/`, from either
+   [CurseForge](https://www.curseforge.com/minecraft/mc-mods/bettercontroller)
+   or the [latest GitHub release](https://github.com/Nekuzaky/BetterController/releases/latest).
 4. Launch. Plug a controller. Done.
+
+Using a launcher with a mod manager (CurseForge app, Prism, MultiMC)? Install
+from CurseForge and it handles the Fabric API dependency for you.
 
 ## Default bindings
 
