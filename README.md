@@ -15,6 +15,9 @@
   <a href="https://github.com/Nekuzaky/BetterController/releases">
     <img alt="Downloads" src="https://img.shields.io/github/downloads/Nekuzaky/BetterController/total?color=brightgreen">
   </a>
+  <a href="https://www.curseforge.com/minecraft/mc-mods/bettercontroller">
+    <img alt="CurseForge" src="https://img.shields.io/badge/curseforge-download-F16436?logo=curseforge&logoColor=white">
+  </a>
   <img alt="Minecraft" src="https://img.shields.io/badge/minecraft-1.21.11-62b132?logo=minecraft&logoColor=white">
   <img alt="Fabric" src="https://img.shields.io/badge/fabric-0.18.4-blueviolet">
   <img alt="Java" src="https://img.shields.io/badge/java-21-orange?logo=openjdk&logoColor=white">
@@ -30,6 +33,18 @@
   </a>
   <a href="https://github.com/Nekuzaky/BetterController/stargazers">
     <img alt="Stars" src="https://img.shields.io/github/stars/Nekuzaky/BetterController?style=social">
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://buymeacoffee.com/Nekuzaky">
+    <img alt="Buy Me a Coffee" src="https://img.shields.io/badge/buy%20me%20a%20coffee-support-FFDD00?logo=buymeacoffee&logoColor=black">
+  </a>
+  <a href="https://www.patreon.com/Nekuzaky">
+    <img alt="Patreon" src="https://img.shields.io/badge/patreon-support-FF424D?logo=patreon&logoColor=white">
+  </a>
+  <a href="https://github.com/sponsors/Nekuzaky">
+    <img alt="GitHub Sponsors" src="https://img.shields.io/badge/sponsors-support-EA4AAA?logo=githubsponsors&logoColor=white">
   </a>
 </p>
 
@@ -64,8 +79,13 @@ stay small, predictable and allocation-free while doing it.
 
 1. [Fabric Loader](https://fabricmc.net/use/) for Minecraft 1.21.11.
 2. [Fabric API](https://modrinth.com/mod/fabric-api) in `mods/`.
-3. `bettercontroller-<version>.jar` from the [latest release](https://github.com/Nekuzaky/BetterController/releases/latest) in `mods/`.
+3. `bettercontroller-<version>.jar` in `mods/`, from either
+   [CurseForge](https://www.curseforge.com/minecraft/mc-mods/bettercontroller)
+   or the [latest GitHub release](https://github.com/Nekuzaky/BetterController/releases/latest).
 4. Launch. Plug a controller. Done.
+
+Using a launcher with a mod manager (CurseForge app, Prism, MultiMC)? Install
+from CurseForge and it handles the Fabric API dependency for you.
 
 ## Default bindings
 
@@ -253,6 +273,19 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). The TL;DR:
 
 Read [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) and
 [SECURITY.md](SECURITY.md) for the rest.
+
+## Support
+
+BetterController is free and MIT-licensed, and it stays that way. If it made
+your gamepad usable and you want to help cover the time spent chasing
+Minecraft version bumps and controller quirks:
+
+- [**Buy Me a Coffee**](https://buymeacoffee.com/Nekuzaky) — one-off, no account needed.
+- [**Patreon**](https://www.patreon.com/Nekuzaky) — monthly, for build previews and version-bump notes.
+- [**GitHub Sponsors**](https://github.com/sponsors/Nekuzaky) — same thing, billed through GitHub.
+
+Nothing in the mod is paywalled and nothing ever will be. Starring the repo
+and filing good bug reports helps just as much.
 
 ## License
 
